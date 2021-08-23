@@ -6,48 +6,67 @@ import random
 
 import schedcat.model.tasks as ts
 
+
 def uniform_int(minval, maxval):
     "Create a function that draws ints uniformly from {minval, ..., maxval}"
+
     def _draw():
         return random.randint(minval, maxval)
+
     return _draw
+
 
 def uniform(minval, maxval):
     "Create a function that draws floats uniformly from [minval, maxval]"
+
     def _draw():
         return random.uniform(minval, maxval)
+
     return _draw
+
 
 def log_uniform(minval, maxval):
     "Create a function that draws floats log-uniformly from [minval, maxval]"
+
     def _draw():
-        return exp(random.uniform(log(minval), log(maxval))) 
+        return exp(random.uniform(log(minval), log(maxval)))
+
     return _draw
+
 
 def log_uniform_int(minval, maxval):
     "Create a function that draws ints log-uniformly from {minval, ..., maxval}"
     draw_float = log_uniform(minval, maxval + 1)
+
     def _draw():
         val = int(draw_float())
         val = max(minval, val)
         val = min(maxval, val)
         return val
+
     return _draw
+
 
 def uniform_choice(choices):
     "Create a function that draws uniformly elements from choices"
     selector = uniform_int(0, len(choices) - 1)
+
     def _draw():
         return choices[selector()]
+
     return _draw
+
 
 def truncate(minval, maxval):
     def _limit(fun):
         def _f(*args, **kargs):
             val = fun(*args, **kargs)
             return min(maxval, max(minval, val))
+
         return _f
+
     return _limit
+
 
 def redraw(minval, maxval):
     def _redraw(dist):
@@ -57,8 +76,11 @@ def redraw(minval, maxval):
                 val = dist(*args, **kargs)
                 in_range = minval <= val <= maxval
             return val
+
         return _f
+
     return _redraw
+
 
 def exponential(minval, maxval, mean, limiter=redraw):
     """Create a function that draws floats from an exponential
@@ -66,9 +88,12 @@ def exponential(minval, maxval, mean, limiter=redraw):
     than minval or greater than maxval, then either another value is
     drawn (if limiter=redraw) or the drawn value is set to minval or
     maxval (if limiter=truncate)."""
+
     def _draw():
         return random.expovariate(1.0 / mean)
+
     return limiter(minval, maxval)(_draw)
+
 
 def multimodal(weighted_distributions):
     """Create a function that draws values from several distributions
@@ -76,6 +101,7 @@ def multimodal(weighted_distributions):
     (distribution, weight) pairs."""
     total_weight = sum([w for (d, w) in weighted_distributions])
     selector = uniform(0, total_weight)
+
     def _draw():
         x = selector()
         wsum = 0
@@ -83,9 +109,9 @@ def multimodal(weighted_distributions):
             wsum += w
             if wsum >= x:
                 return d()
-        assert False # should never drop off
-    return _draw
+        assert False  # should never drop off
 
+    return _draw
 
 
 class TaskGenerator(object):
@@ -94,9 +120,9 @@ class TaskGenerator(object):
     def __init__(self, period, util, deadline=lambda x, y: y):
         """Creates TaskGenerator based on a given a period and
         utilization distributions."""
-        self.period    = period
-        self.util      = util
-        self.deadline  = deadline
+        self.period = period
+        self.util = util
+        self.deadline = deadline
 
     def tasks(self, max_tasks=None, max_util=None, squeeze=False,
               time_conversion=trunc):
@@ -108,20 +134,20 @@ class TaskGenerator(object):
         into integral task parameters.
         """
         count = 0
-        usum  = 0
+        usum = 0
         while ((max_tasks is None or count < max_tasks) and
-               (max_util is None  or usum  < max_util)):
-            period   = self.period()
-            util     = self.util()
-            cost     = period * util
+               (max_util is None or usum < max_util)):
+            period = self.period()
+            util = self.util()
+            cost = period * util
             deadline = self.deadline(cost, period)
             # scale as required
-            period   = max(1,    int(time_conversion(period)))
-            cost     = max(1,    int(time_conversion(cost)))
+            period = max(1, int(time_conversion(period)))
+            cost = max(1, int(time_conversion(cost)))
             deadline = max(1, int(time_conversion(deadline)))
             util = cost / period
-            count  += 1
-            usum   += util
+            count += 1
+            usum += util
             if max_util and usum > max_util:
                 if squeeze:
                     # make last task fit exactly
