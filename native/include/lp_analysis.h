@@ -136,4 +136,14 @@ bool lp_pedf_lockfree_preempt_is_schedulable(const ResourceSharingInfo& info);
 /* P-EDF Lock-Free Synchronization with NP Commit Loops, using blocking aware PDC */
 bool lp_pedf_lockfree_NP_is_schedulable(const ResourceSharingInfo& info);
 
+/* The following analyses are described in the extended version of:
+ *
+ *  J. Robb, B. Brandenburg, "Nested, but Separate: Isolating Unrelated Critical
+ * Sections in Real-Time Nested Locking", ECRTS'20.
+ */
+
+BlockingBounds* lp_gipp_bounds(const ResourceSharingInfo& info,
+                               const ResourceLocality& locality, bool use_RTA = true);
+
+
 #endif /* LP_ANALYSYS_H_ */
