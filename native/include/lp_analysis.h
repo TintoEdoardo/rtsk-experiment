@@ -144,6 +144,17 @@ bool lp_pedf_lockfree_NP_is_schedulable(const ResourceSharingInfo& info);
 
 BlockingBounds* lp_gipp_bounds(const ResourceSharingInfo& info,
                                const ResourceLocality& locality, bool use_RTA = true);
+// Return here
+#include "nested_cs.h"
+void outermost_request_for_resource_in_group(
+        const ResourceSharingInfo& info,
+        const TaskInfo& ti,
+        const CriticalSectionsOfTask& cst)
+{
+    // compute the list of resources accessed by ti (g)
+    // for all task in the same cluster count those accessing g
+}
 
+//
 
 #endif /* LP_ANALYSYS_H_ */
