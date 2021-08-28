@@ -21,6 +21,12 @@ std::string VarMapper::key2str(uint64_t key, unsigned int var) const
 		case BLOCKING_OTHER:
 			buf << "Xo[";
 			break;
+        case BLOCKING_RSM:
+            buf << "Xr[";
+            break;
+        case BLOCKING_TOKEN:
+            buf << "Xt[";
+            break;
 		default:
 			buf << "X?[";
 	}

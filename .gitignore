@@ -39,6 +39,7 @@ config.mk
 # ------------------------------------------
 # Manually inserted
 .idea/*.xml
+.idea/
 
 # ------------------------------------------
 # Created by https://www.toptal.com/developers/gitignore/api/clion,intellij,c++,python,cmake,macos

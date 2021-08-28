@@ -17,9 +17,10 @@ enum blocking_type
 	BLOCKING_DIRECT,
 	BLOCKING_INDIRECT,
 	BLOCKING_PREEMPT,
-	BLOCKING_TOKEN,
+	BLOCKING_OTHER,
+
 	BLOCKING_RSM,
-	BLOCKING_OTHER
+	BLOCKING_TOKEN
 };
 
 // s-oblivious analysis reuses BLOCKING_DIRECT as a catch-all blocking type.

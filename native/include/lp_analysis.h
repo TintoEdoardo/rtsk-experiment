@@ -145,5 +145,4 @@ bool lp_pedf_lockfree_NP_is_schedulable(const ResourceSharingInfo& info);
 BlockingBounds* lp_gipp_bounds(const ResourceSharingInfo& info,
                                const ResourceLocality& locality, bool use_RTA = true);
 
-
 #endif /* LP_ANALYSYS_H_ */
