@@ -439,7 +439,6 @@ static void add_detailed_RSM_constraint(
 
     foreach(ls, g)
     {
-        const CriticalSectionsOfTask& ti_cs = get_critical_section_of_task(info, cst, ti);
 
         foreach(subset_acquired_by_other(*g, info, ti), s)
         {
@@ -498,6 +497,66 @@ static void add_gipp_constraints(
     add_detailed_RSM_constraint(vars, ls, info, ti, cst, lp);
 }
 
+static unsigned int total_length(
+        const CriticalSection& c,
+        const CriticalSectionsOfTask& cst)
+{
+    unsigned int length;
+
+    if(c.is_outermost())
+    {
+        length = 0;
+        foreach(cst.get_cs(), cs)
+        {
+            if(cst.get_outermost(cs->resource_id) == c.resource_id)
+                length += cs->length;
+        }
+    }
+    else
+        length = c.length;
+
+    return length;
+}
+
+static void set_blocking_objective_gipp(
+        VarMapper& vars,
+        const ResourceSharingInfo& info,
+        const TaskInfo& ti,
+        const CriticalSectionsOfTaskset& csts,
+        LinearProgram& lp)
+{
+    LinearExpression *obj;
+
+    obj = lp.get_objective();
+
+    foreach_task_except(info.get_tasks(), ti, tx)
+    {
+        unsigned int x                      = ti.get_id();
+        const CriticalSectionsOfTask& cs_tx = get_critical_section_of_task(info, csts, *tx);
+        unsigned int overlaping_jobs        = max_overlapping_jobs(ti, *tx);
+
+        foreach(cs_tx.get_cs(), cs)
+        {
+            if(cs->is_outermost())
+            {
+                unsigned int y      = cs->resource_id;
+                unsigned int length = total_length(*cs, cs_tx);
+                for(int v = 0; v < (int) overlaping_jobs; v++)
+                {
+                    unsigned int var_id;
+
+                    var_id = vars.lookup(x, y, v, BLOCKING_TOKEN);
+                    obj->add_term(length, var_id);
+
+                    var_id = vars.lookup(x, y, v, BLOCKING_RSM);
+                    obj->add_term(length, var_id);
+
+                }
+            }
+        }
+    }
+}
+
 static void apply_gipp_bounds_for_task(
         unsigned int i,
         BlockingBounds& bounds,
@@ -508,9 +567,8 @@ static void apply_gipp_bounds_for_task(
     LinearProgram lp;
     VarMapper vars;
     const TaskInfo& ti = info.get_tasks()[i];
-    unsigned int cluster = ti.get_cluster();
 
-    set_blocking_objective_sob(vars, info, ti, lp);
+    set_blocking_objective_gipp(vars, info, ti, cst, lp);
     vars.seal();
 
     add_gipp_constraints(vars, ls, info, ti, cst, lp);
