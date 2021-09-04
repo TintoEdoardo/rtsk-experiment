@@ -2,8 +2,6 @@
 #include "blocking.h"
 #include "nested_cs.h"
 
-typedef std::set<LockSet> LockSets;
-
 // Maximum number of jobs of Tx overlapping with Ji.
 static unsigned int max_overlapping_jobs(
         const TaskInfo& ti,
@@ -439,8 +437,8 @@ static void add_detailed_RSM_constraint(
 
     foreach(ls, g)
     {
-
-        foreach(subset_acquired_by_other(*g, info, ti), s)
+        LockSets lss = subset_acquired_by_other(*g, info, ti);
+        foreach(lss, s)
         {
             for(int k = 0; k < (int) c_size; k++)
             {
@@ -586,10 +584,11 @@ static void apply_gipp_bounds_for_task(
 
 static BlockingBounds* _lp_gipp_bounds(
         const ResourceSharingInfo& info,
-        const LockSets& ls,
         const CriticalSectionsOfTaskset& cst)
 {
     BlockingBounds* results = new BlockingBounds(info);
+
+    LockSets ls = cst.get_resource_groups();
 
     for (unsigned int i = 0; i < info.get_tasks().size(); i++)
         apply_gipp_bounds_for_task(i, *results, ls, info, cst);
@@ -599,11 +598,10 @@ static BlockingBounds* _lp_gipp_bounds(
 
 BlockingBounds* lp_gipp_bounds(
         const ResourceSharingInfo& info,
-        const LockSets& ls,
         const CriticalSectionsOfTaskset& cst)
 {
 
-    BlockingBounds *results = _lp_gipp_bounds(info, ls, cst);
+    BlockingBounds *results = _lp_gipp_bounds(info, cst);
 
     return results;
 }

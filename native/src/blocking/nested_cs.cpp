@@ -62,6 +62,46 @@ CriticalSectionsOfTaskset::get_transitive_nesting_relationship() const
 	return nested;
 }
 
+LockSets CriticalSectionsOfTaskset::get_resource_groups() const
+{
+    // Initialize the set of resource groups
+    LockSets resource_groups;
+
+    // Compute tran. nested relationship
+    hashmap<unsigned int, hashset<unsigned int> > nested;
+    nested = get_transitive_nesting_relationship();
+
+    /* For each resource, search for sets which are maximal,
+     * therefore they are not subset of any other set */
+    foreach(nested, ni)
+    {
+        LockSet lockSet;
+        bool is_group = true;
+
+        // Check that ni is not subset of any other set
+        foreach(nested, nx)
+        {
+            if(ni->first != nx->first)
+            {
+                if(!is_subset_of(ni->second, nx->second))
+                    is_group = false;
+            }
+        }
+
+        if(is_group)
+        {
+            // Build the LockSet corresponding to the group
+            foreach(ni->second, r_ni)
+            {
+                lockSet.insert(*r_ni);
+            }
+            resource_groups.insert(lockSet);
+        }
+    }
+
+    return  resource_groups;
+}
+
 
 LockSet CriticalSection::get_outer_locks(const CriticalSectionsOfTask &task) const
 {
