@@ -2,90 +2,183 @@
 #include "blocking.h"
 #include "nested_cs.h"
 
-// Maximum number of jobs of Tx overlapping with Ji.
-static unsigned int max_overlapping_jobs(
-        const TaskInfo& ti,
-        const TaskInfo& tx)
+typedef std::vector<LockSet> ResourceGroup;
+typedef std::vector<CriticalSections > OutermostCS;
+
+class PartitionedGIPPLP : protected LinearProgram
 {
-    return ceil((ti.get_response() + tx.get_response()) / ti.get_period());
+
+private:
+
+    VarMapper vars;
+
+    const int i;
+    const TaskInfo& ti;
+    const CriticalSectionsOfTask& csi;
+    const TaskInfos& taskset;
+    const CriticalSectionsOfTasks& taskset_cs;
+
+    const unsigned int cpu_number; // number of CPUs, discovered from taskset
+    const unsigned int cluster_size;
+
+    ResourceGroup res_groups; // set of resource groups
+    OutermostCS outermost_cs; // vector of set containing outermost cs per task
+
+    unsigned int max_overlapping_jobs(const TaskInfo& tx) const
+    {
+        return tx.get_max_num_jobs(ti.get_response());
+    }
+    void configure_outermost_cs()
+    {
+        unsigned int cst_index = 0;
+        enumerate(taskset_cs, cst, cst_index)
+        {
+            foreach(cst->get_cs(), cs)
+            {
+                CriticalSections ocs;
+                if(cs->is_outermost())
+                {
+                    std::cout << "    outer_cs modification" << std::endl;
+                    ocs.push_back(*cs);
+                }
+                outermost_cs.push_back(ocs);
+            }
+        }
+    }
+    unsigned int count_competing_tasks_in_cluster(
+            const LockSet& g,
+            unsigned int k) const;
+    unsigned int compute_token_waiting_times(const LockSet& g) const;
+    LockSets subset_acquired_by_other(const LockSet& g) const;
+    bool cs_is_subset_of_s(
+            unsigned int x,
+            unsigned int y,
+            const LockSet& s) const;
+    bool are_cs_conflicting(
+            const LockSet& ls,
+            const LockSet& ls1) const;
+    unsigned int count_conflicting_outermost_cs(
+            unsigned int x,
+            const LockSet& s) const;
+    unsigned int total_length(
+            unsigned int x,
+            unsigned int y) const;
+    void add_cs_blocking_constraints();
+    void add_token_blocking_constraint();
+    void add_aggregate_token_blocking_constraint();
+    void add_percluster_RSM_constraint();
+    void add_detailed_RSM_constraint();
+    void add_gipp_constraints();
+    void set_blocking_objective_gipp();
+    //void apply_gipp_bounds_for_task();
+    unsigned int issued_outermost_request(const LockSet& g) const;
+
+
+public:
+    PartitionedGIPPLP(
+            const ResourceSharingInfo& tsk,
+            const CriticalSectionsOfTaskset& tsk_cs,
+            int task_under_analysis,
+            unsigned int cpu_num,
+            unsigned int c_size);
+
+    unsigned long solve();
+
+};
+
+PartitionedGIPPLP::PartitionedGIPPLP(
+        const ResourceSharingInfo& tsk,
+        const CriticalSectionsOfTaskset& tsk_cs,
+        int task_under_analysis,
+        unsigned int cpu_num,
+        unsigned int c_size)
+      : i(task_under_analysis),
+        ti(tsk.get_tasks()[i]),
+        csi(tsk_cs.get_tasks()[i]),
+        taskset(tsk.get_tasks()),
+        taskset_cs(tsk_cs.get_tasks()),
+        cpu_number(cpu_num),
+        cluster_size(c_size),
+        res_groups(tsk_cs.get_resource_groups()),
+        outermost_cs()
+{
+    std::cout << "Enter constructor" << std::endl;
+    configure_outermost_cs();
+    std::cout << "End outer_cs creation" << std::endl;
+    set_blocking_objective_gipp();
+    std::cout << "End obj creation" << std::endl;
+    vars.seal();
+    add_gipp_constraints();
+    std::cout << "End constraints" << std::endl;
 }
+
 
 // Constraint 22 in [Brandenburg 2020]
 // Prevent any blocking critical section from being counted twice.
-static void add_cs_blocking_constraints(
-        VarMapper& vars,
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti,
-        const CriticalSectionsOfTask& cst,
-        LinearProgram& lp)
+void PartitionedGIPPLP::add_cs_blocking_constraints()
 {
-
-    foreach_task_except(info.get_tasks(), ti, tx)
+    unsigned int x = 0;
+    enumerate(taskset, tx, x)
     {
-        unsigned int overlapping_jobs = max_overlapping_jobs(ti, *tx);
-        unsigned int t = tx->get_id();
+        if(tx->get_id() == ti.get_id())
+            continue;
 
+        unsigned int overlapping_jobs = max_overlapping_jobs(*tx);
+        unsigned int y                = 0;
+        CriticalSectionsOfTask cst    = taskset_cs[x];
         foreach(cst.get_cs(), cs)
         {
             if(cs->is_outermost())
             {
-                unsigned int q = cs->resource_id;
-
                 for(int v = 0; v < (int) overlapping_jobs; v++)
                 {
                     LinearExpression *exp = new LinearExpression();
                     unsigned int var_id;
 
-                    var_id = vars.lookup(t, q, v, BLOCKING_TOKEN);
+                    var_id = vars.lookup(x, y, v, BLOCKING_TOKEN);
                     exp->add_var(var_id);
 
-                    var_id = vars.lookup(t, q, v, BLOCKING_RSM);
+                    var_id = vars.lookup(x, y, v, BLOCKING_RSM);
                     exp->add_var(var_id);
 
-                    lp.add_inequality(exp, 1);
+                    add_inequality(exp, 1);
                 }
+                y++;
             }
         }
     }
 }
 
 // Number of times Ji issues an outermost request for a 􏰈􏰏resource in g.
-static unsigned int issued_outermost_request(
-        const CriticalSectionsOfTask& cst_i,
-        const LockSet& g)
+unsigned int PartitionedGIPPLP::issued_outermost_request(const LockSet& g) const
 {
     unsigned int outermost_request_count = 0;
 
-    foreach(cst_i.get_cs(), cs)
+    // Iterate over outermost cs of task i
+    foreach(outermost_cs[i], ocs)
     {
         // The resource is in g?
-        if(g.find(cs->resource_id) != g.end())
+        if(g.find(ocs->resource_id) != g.end())
         {
-            // The request is outermost?
-            if(cs->is_outermost())
-            {
-                outermost_request_count++;
-            }
+            outermost_request_count++;
         }
     }
     return outermost_request_count;
 }
 
 // Number of tasks in cluster k that request a resource in g.
-static unsigned int count_competing_tasks_in_cluster(
+unsigned int PartitionedGIPPLP::count_competing_tasks_in_cluster(
         const LockSet& g,
-        const ResourceSharingInfo& info,
-        const unsigned int k)
+        unsigned int k) const
 {
-    unsigned int competing_tasks_count = 0;
+    unsigned int competing_tasks_count  = 0;
     bool is_competing                   = false;
 
-    foreach_task_in_cluster(info.get_tasks(), k, tx)
+    foreach_task_in_cluster(taskset, k, tx)
     {
         foreach(tx->get_requests(), req)
         {
-            unsigned int res_id = req->get_resource_id();
-            if(g.find(res_id) != g.end())
+            if(g.find(req->get_resource_id()) != g.end())
                 is_competing = true;
         }
         if(is_competing)
@@ -95,217 +188,150 @@ static unsigned int count_competing_tasks_in_cluster(
     return competing_tasks_count;
 }
 
-// Compute the set of clusters.
-static std::set<unsigned int> compute_clusters_set(
-        const ResourceSharingInfo& info)
-{
-    std::set<unsigned int> clusters;
-
-    foreach(info.get_tasks(), tx)
-    {
-        unsigned int cluster_id = tx->get_cluster();
-        if(clusters.find(cluster_id) == clusters.end())
-            clusters.insert(cluster_id);
-    }
-
-    return clusters;
-}
-
 // Wi,g upper-bounds the number of times Ji must wait for
 // a token of group g.
-static unsigned int compute_token_waiting_times(
-        const LockSet& g,
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti,
-        const CriticalSectionsOfTask& cst)
+unsigned int PartitionedGIPPLP::compute_token_waiting_times(
+        const LockSet& g) const
 {
     unsigned int k                 = ti.get_cluster();
-    unsigned int clusters_number   = compute_clusters_set(info).size();
-    unsigned int issued_outer_reqs = issued_outermost_request(cst, g);
-    unsigned int w_i_g;
+    unsigned int issued_outer_reqs = issued_outermost_request(g);
+    unsigned int W_i_g;
 
     // Compute the number of times that other tasks require
     // a token while Ji is pending.
     unsigned int token_required_while_pending = 0;
 
-    foreach_task_in_cluster(info.get_tasks(), k, tx)
+    foreach_task_in_cluster(taskset, k, tx)
     {
-        if(tx->get_id() != ti.get_id())
-        {
-            token_required_while_pending +=
-                    issued_outermost_request(cst, g) * max_overlapping_jobs(ti, *tx);
-        }
+        if(tx->get_id() == ti.get_id())
+            continue;
+
+        token_required_while_pending +=
+                issued_outer_reqs * max_overlapping_jobs(*tx);
+
     }
     token_required_while_pending =
-            token_required_while_pending - clusters_number + 1;
+            token_required_while_pending - cluster_size + 1;
 
     // Compute Wi,g.
-    if(count_competing_tasks_in_cluster(g, info, k) < clusters_number)
-        w_i_g = 0;
+    if(count_competing_tasks_in_cluster(g, k) < cluster_size)
+        W_i_g = 0;
     else
-        w_i_g = std::min(issued_outer_reqs, token_required_while_pending);
+        W_i_g = std::min(issued_outer_reqs, token_required_while_pending);
 
-    return w_i_g;
-}
-
-// Extract the corresponding critical sections of task.
-static const CriticalSectionsOfTask& get_critical_section_of_task(
-        const ResourceSharingInfo& info,
-        const CriticalSectionsOfTaskset& cst,
-        const TaskInfo& ti)
-{
-    std::size_t ti_index;
-
-    foreach(info.get_tasks(), t)
-    {
-        if(t->get_id() == ti.get_id())
-            ti_index = std::distance(info.get_tasks().begin(), t);
-    }
-
-    return cst.get_tasks()[ti_index];
+    return W_i_g;
 }
 
 // Constraints 25 in [Brandenburg 2020]
-static void add_token_blocking_constraint(
-        VarMapper& vars,
-        const LockSets& ls,
-        const ResourceSharingInfo& info,
-        const CriticalSectionsOfTaskset& cst,
-        LinearProgram& lp)
+void PartitionedGIPPLP::add_token_blocking_constraint()
 {
-    foreach(ls, g)
+    foreach(res_groups, g)
     {
-        foreach(info.get_tasks(), tx)
+        unsigned int x = 0;
+        enumerate(taskset, tx, x)
         {
-            unsigned int tx_id               = tx->get_id();
-            TaskInfo t                       = *tx;
-            const CriticalSectionsOfTask& cs = get_critical_section_of_task(info, cst, *tx);
+            if(tx->get_id() == ti.get_id())
+                continue;
 
-            foreach_task_except(info.get_tasks(), t, ti)
+            const TaskInfo& t                       = *tx;
+
+            unsigned int gt_waiting = compute_token_waiting_times(*g);
+            unsigned int y          = 0;
+
+            LinearExpression *exp = new LinearExpression();
+            unsigned int var_id;
+
+            enumerate(outermost_cs[x], ocs, y)
             {
-                unsigned int gt_waiting = compute_token_waiting_times(*g, info, *ti, cs);
-
-                LinearExpression *exp = new LinearExpression();
-                unsigned int var_id;
-
-                foreach(cs.get_cs(), c)
+                unsigned int q = ocs->resource_id;
+                if((g->find(q) != g->end()))
                 {
-                    unsigned int q = c->resource_id;
-
-                    if(c->is_outermost())
+                    for(int v = 0; v < (int) max_overlapping_jobs(t); v++)
                     {
-                        if((g->find(q) != g->end()))
-                        {
-                            for(int v = 0; v < (int) max_overlapping_jobs(t, *ti); v++)
-                            {
-                                var_id = vars.lookup(tx_id, q, v, BLOCKING_TOKEN);
-                                exp->add_var(var_id);
-                            }
-                        }
+                        var_id = vars.lookup(x, y, v, BLOCKING_TOKEN);
+                        exp->add_var(var_id);
                     }
                 }
-                lp.add_inequality(exp, gt_waiting);
+                y++;
             }
+            add_inequality(exp, gt_waiting);
         }
     }
 }
 
 // Constraints 26 in [Brandenburg 2020]
-static void add_aggregate_token_blocking_constraint(
-        VarMapper& vars,
-        const LockSets& ls,
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti,
-        const CriticalSectionsOfTaskset& cst,
-        LinearProgram& lp)
+void PartitionedGIPPLP::add_aggregate_token_blocking_constraint()
 {
-    foreach(ls, g)
+    foreach(res_groups, g)
     {
-        const CriticalSectionsOfTask& ti_cs = get_critical_section_of_task(info, cst, ti);
-        unsigned int gt_waiting             = compute_token_waiting_times(*g, info, ti, ti_cs);
-        unsigned int c_size                 = compute_clusters_set(info).size();
-
-        for(int k = 0; k < (int) c_size; k++)
+        unsigned int gt_waiting             = compute_token_waiting_times(*g);
+        unsigned int cluster_ti              = ti.get_cluster();
+        for(int k = 0; k < (int) cluster_size; k++)
         {
-            unsigned int competing_tasks    = count_competing_tasks_in_cluster(*g, info, ti.get_cluster());
+            unsigned int competing_tasks    = count_competing_tasks_in_cluster(*g, cluster_ti);
 
             LinearExpression *exp = new LinearExpression();
             unsigned int var_id;
 
-            foreach_task_in_cluster(info.get_tasks(), ti.get_cluster(), tx)
+            unsigned int x = 0;
+            enumerate(taskset, tx, x)
             {
-                if(ti.get_id() != tx->get_id())
-                {
-                    unsigned int tx_id        = tx->get_id();
-                    TaskInfo t                = *tx;
-                    CriticalSectionsOfTask cs = get_critical_section_of_task(info, cst, t);
+                if(tx->get_cluster() != cluster_ti)
+                    continue;
 
-                    foreach(cs.get_cs(), c)
+                unsigned int y = 0;
+                enumerate(outermost_cs[x], ocs, y)
+                {
+                    unsigned int q = ocs->resource_id;
+                    if(g->find(q) != g->end())
                     {
-                        if(c->is_outermost())
+                        for(int v = 0; v < (int) max_overlapping_jobs(*tx); v++)
                         {
-                            unsigned int q = c->resource_id;
-                            if(g->find(q) != g->end())
-                            {
-                                for(int v = 0; v < (int) max_overlapping_jobs(ti, t); v++)
-                                {
-                                    var_id = vars.lookup(tx_id, q, v, BLOCKING_TOKEN);
-                                    exp->add_var(var_id);
-                                }
-                            }
+                            var_id = vars.lookup(x, y, v, BLOCKING_TOKEN);
+                            exp->add_var(var_id);
                         }
                     }
                 }
             }
-            lp.add_inequality(exp, gt_waiting * std::min(c_size, competing_tasks));
+            add_inequality(exp, gt_waiting * std::min(cluster_size, competing_tasks));
         }
     }
 }
 
 // Constraints 27 in [Brandenburg 2020]
-static void add_percluster_RSM_constraint(
-        VarMapper& vars,
-        const LockSets& ls,
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti,
-        const CriticalSectionsOfTaskset& cst,
-        LinearProgram& lp)
+void PartitionedGIPPLP::add_percluster_RSM_constraint()
 {
-    foreach(ls, g)
+    foreach(res_groups, g)
     {
-        const CriticalSectionsOfTask& ti_cs = get_critical_section_of_task(info, cst, ti);
-        unsigned int gt_waiting             = compute_token_waiting_times(*g, info, ti, ti_cs);
-        unsigned int c_size                 = compute_clusters_set(info).size();
+        //const CriticalSectionsOfTask& ti_cs = get_critical_section_of_task(info, cst, ti);
+        unsigned int gt_waiting             = compute_token_waiting_times(*g);
 
-        for(int k = 0; k < (int) c_size; k++)
+        for(int k = 0; k < (int) (cpu_number / cluster_size); k++)
         {
-            unsigned int competing_tasks    = count_competing_tasks_in_cluster(*g, info, k);
-
+            unsigned int competing_tasks    = count_competing_tasks_in_cluster(*g, k);
+            unsigned int x                  = 0;
             LinearExpression *exp = new LinearExpression();
             unsigned int var_id;
 
-            foreach_task_in_cluster(info.get_tasks(), ti.get_cluster(), tx)
+            enumerate(taskset, tx, x)
             {
-                if(ti.get_id() != tx->get_id())
+                if(tx->get_cluster() != ti.get_cluster())
+                    continue;
+
+                if(tx->get_id() != ti.get_id())
+                    continue;
+
+                unsigned int y = 0;
+                enumerate(outermost_cs[x], ocs, y)
                 {
-                    unsigned int tx_id        = tx->get_id();
-                    TaskInfo t                = *tx;
-                    CriticalSectionsOfTask cs = get_critical_section_of_task(info, cst, t);
+                    unsigned int q = ocs->resource_id;
 
-                    foreach(cs.get_cs(), c)
+                    if(g->find(q) != g->end())
                     {
-                        if(c->is_outermost())
+                        for(int v = 0; v < (int) max_overlapping_jobs(*tx); v++)
                         {
-                            unsigned int q = c->resource_id;
-
-                            if(g->find(q) != g->end())
-                            {
-                                for(int v = 0; v < (int) max_overlapping_jobs(ti, t); v++)
-                                {
-                                    var_id = vars.lookup(tx_id, q, v, BLOCKING_RSM);
-                                    exp->add_var(var_id);
-                                }
-                            }
+                            var_id = vars.lookup(x, y, v, BLOCKING_RSM);
+                            exp->add_var(var_id);
                         }
                     }
                 }
@@ -313,27 +339,28 @@ static void add_percluster_RSM_constraint(
 
             unsigned int exp_value;
             if((int) ti.get_cluster() == k)
-                exp_value = gt_waiting * std::min(c_size, competing_tasks);
+                exp_value = gt_waiting * std::min(cluster_size, competing_tasks);
             else
-                exp_value = gt_waiting * std::min(c_size - 1, competing_tasks -1);
-            lp.add_inequality(exp, exp_value);
+                exp_value = gt_waiting * std::min(cluster_size - 1, competing_tasks -1);
+            add_inequality(exp, exp_value);
         }
     }
 }
 
 // Compute the set of all combinations of resources in group g
 // acquired by other tasks.
-static const LockSets subset_acquired_by_other(
-        const LockSet& g,
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti)
+LockSets PartitionedGIPPLP::subset_acquired_by_other(const LockSet& g) const
 {
     LockSets result;
-
-    foreach_task_except(info.get_tasks(), ti, tx)
+    unsigned int x = 0;
+    enumerate(taskset, tx, x)
     {
+        if(tx->get_id() == ti.get_id())
+            continue;
+
         const Requests reqs = tx->get_requests();
         LockSet ls;
+
         foreach(reqs, req)
         {
             unsigned int res_id = req->get_resource_id();
@@ -342,40 +369,48 @@ static const LockSets subset_acquired_by_other(
                 ls.insert(res_id);
             }
         }
-        result.insert(ls);
+        result.push_back(ls);
     }
     return result;
 }
 
 // Check if resources accessed in cs are a subset of s.
-static bool cs_is_subset_of_s(
-        const CriticalSection& cs,
-        const CriticalSectionsOfTask& cst,
-        const LockSet& s)
+bool PartitionedGIPPLP::cs_is_subset_of_s(
+        unsigned int x,
+        unsigned int y,
+        const LockSet& s) const
 {
-    // LockSet for nested resources in cs.
-    LockSet cs_ls;
 
-    // Insert cs direct resource.
-    cs_ls.insert(cs.resource_id);
+    const CriticalSectionsOfTask& css_x = taskset_cs[x];
+    //unsigned int cs_x_y_id       = css_x.get_cs()[y].resource_id;
+
+    // LockSet for nested resources in cs.
+    LockSet cs_lockset = css_x.get_nested_cs_resource(y);
+
+    /*
+    // Insert cs resource into his lockset.
+    cs_lockset.insert(cs_x_y.resource_id);
 
     // Insert nested resources.
-    foreach(cst.get_cs(), c)
+    unsigned int cs_index = 0;
+    enumerate(css_x.get_cs(), cs, cs_index)
     {
-        if(cst.get_outermost(c->resource_id) == cs.resource_id)
+        if(!cs->is_outermost())
         {
-            cs_ls.insert(c->resource_id);
+            if(css_x.get_outermost(cs_index) == cs_x_y.resource_id)
+            {
+                cs_lockset.insert(cs->resource_id);
+            }
         }
-    }
+    }*/
 
-    return is_subset_of(cs_ls, s);
+    return is_subset_of(cs_lockset, s);
 }
 
 // Check if ls an ls1 are possibly conflicting.
-static bool are_cs_conflicting(
+bool PartitionedGIPPLP::are_cs_conflicting(
         const LockSet& ls,
-        const LockSet& ls1,
-        const CriticalSectionsOfTaskset& csts)
+        const LockSet& ls1) const
 {
     // Check if the intersection between ls and ls1 is empty
     bool empty_intersection = true;
@@ -387,14 +422,14 @@ static bool are_cs_conflicting(
 
     // Check if lb > la with lb in ls1 and la in ls.
     bool no_relation = true;
-    foreach(ls1, lb)
+    foreach(ls1, lb_id)
     {
-        foreach(csts.get_tasks(), cst)
+        foreach(taskset_cs, cst)
         {
             foreach(cst->get_cs(), la)
             {
                 if(ls.find(la->resource_id) != ls.end()
-                    && la->outer == (int) *lb)
+                    && la->outer == (int) *lb_id)
                     no_relation = false;
             }
         }
@@ -403,20 +438,20 @@ static bool are_cs_conflicting(
 }
 
 // Compute the number of possibly conflicting outermost cs
-static unsigned int count_conflicting_outermost_cs(
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti,
-        const LockSet& s,
-        const CriticalSectionsOfTaskset& csts)
+unsigned int PartitionedGIPPLP::count_conflicting_outermost_cs(
+        unsigned int x,
+        const LockSet& s) const
 {
     unsigned int result        = 0;
-    CriticalSectionsOfTask cst = get_critical_section_of_task(info, csts, ti);
 
-    foreach(cst.get_cs(), cs)
+    unsigned int y = 0;
+    enumerate(taskset_cs[x].get_cs(), cs, y)
     {
         if(cs->is_outermost())
         {
-            if(are_cs_conflicting(s, cs->get_outer_locks(cst), csts))
+            LockSet nested_res = taskset_cs[x].get_nested_cs_resource(y);
+
+            if(are_cs_conflicting(nested_res, s))
                 result++;
         }
     }
@@ -425,42 +460,48 @@ static unsigned int count_conflicting_outermost_cs(
 }
 
 // Constraints 28 in [Brandenburg 2020]
-static void add_detailed_RSM_constraint(
-        VarMapper& vars,
-        const LockSets& ls,
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti,
-        const CriticalSectionsOfTaskset& cst,
-        LinearProgram& lp)
+void PartitionedGIPPLP::add_detailed_RSM_constraint(
+        //VarMapper& vars,
+        //const LockSets& ls,
+        //const ResourceSharingInfo& info,
+        //const TaskInfo& ti,
+        //const CriticalSectionsOfTaskset& cst,
+        //LinearProgram& lp
+        )
 {
-    unsigned int c_size = compute_clusters_set(info).size();
-
-    foreach(ls, g)
+    foreach(res_groups, g)
     {
-        LockSets lss = subset_acquired_by_other(*g, info, ti);
+        LockSets lss = subset_acquired_by_other(*g);
+
         foreach(lss, s)
         {
-            for(int k = 0; k < (int) c_size; k++)
+            for(int k = 0; k < (int) (cpu_number / cluster_size); k++)
             {
-                unsigned int possibly_conclicting_cs = count_conflicting_outermost_cs(info, ti, *s, cst);
-                unsigned int competing_tasks         = count_competing_tasks_in_cluster(*g, info, k);
+                unsigned int possibly_conflicting_cs = count_conflicting_outermost_cs(i, *s);
+                unsigned int competing_tasks         = count_competing_tasks_in_cluster(*g, k);
 
                 LinearExpression *exp = new LinearExpression();
                 unsigned int var_id;
+                unsigned int x = 0;
 
-                foreach_task_in_cluster(info.get_tasks(), ti.get_cluster(), tx)
+                enumerate(taskset, tx, x)
                 {
-                    unsigned int tx_id               = tx->get_id();
+                    if(tx->get_cluster() != ti.get_cluster())
+                        continue;
+
                     TaskInfo t                       = *tx;
-                    const CriticalSectionsOfTask& cs = get_critical_section_of_task(info, cst, *tx);
-                    foreach(cs.get_cs(), c)
+                    unsigned int y                   = 0;
+
+                    enumerate(taskset_cs[x].get_cs(), cs, y)
                     {
-                        if(cs_is_subset_of_s(*c, cs, *s))
+                        if(!cs->is_outermost())
+                            continue;
+
+                        if(cs_is_subset_of_s(x, y, *s))
                         {
-                            unsigned int q = c->resource_id;
-                            for(int v = 0; v < (int) max_overlapping_jobs(ti, *tx); v++)
+                            for(int v = 0; v < (int) max_overlapping_jobs(*tx); v++)
                             {
-                                var_id = vars.lookup(tx_id, q, v, BLOCKING_RSM);
+                                var_id = vars.lookup(x, y, v, BLOCKING_RSM);
                                 exp->add_var(var_id);
                             }
                         }
@@ -469,76 +510,73 @@ static void add_detailed_RSM_constraint(
 
                 unsigned int exp_value;
                 if((int) ti.get_cluster() == k)
-                    exp_value = possibly_conclicting_cs * std::min(c_size, competing_tasks);
+                    exp_value = possibly_conflicting_cs * std::min(cluster_size, competing_tasks);
                 else
-                    exp_value = possibly_conclicting_cs * std::min(c_size - 1, competing_tasks -1);
-                lp.add_inequality(exp, exp_value);
+                    exp_value = possibly_conflicting_cs * std::min(cluster_size - 1, competing_tasks - 1);
+
+                add_inequality(exp, exp_value);
             }
         }
     }
 }
 
-static void add_gipp_constraints(
-        VarMapper& vars,
-        const LockSets& ls,
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti,
-        const CriticalSectionsOfTaskset& cst,
-        LinearProgram& lp)
+void PartitionedGIPPLP::add_gipp_constraints()
 {
-    CriticalSectionsOfTask cs_i = get_critical_section_of_task(info, cst, ti);
-
-    add_cs_blocking_constraints(vars, info, ti, cs_i,lp);
-    add_token_blocking_constraint(vars, ls, info, cst, lp);
-    add_aggregate_token_blocking_constraint(vars, ls, info, ti, cst, lp);
-    add_percluster_RSM_constraint(vars, ls, info, ti, cst, lp);
-    add_detailed_RSM_constraint(vars, ls, info, ti, cst, lp);
+    add_cs_blocking_constraints();
+    add_token_blocking_constraint();
+    add_aggregate_token_blocking_constraint();
+    add_percluster_RSM_constraint();
+    add_detailed_RSM_constraint();
 }
 
-static unsigned int total_length(
-        const CriticalSection& c,
-        const CriticalSectionsOfTask& cst)
+unsigned int PartitionedGIPPLP::total_length(
+        unsigned int x,
+        unsigned int y) const
 {
     unsigned int length;
 
-    if(c.is_outermost())
+    const CriticalSectionsOfTask& cs_x = taskset_cs[x];
+    const CriticalSection& cs_x_y      = taskset_cs[x].get_cs()[y];
+
+    if(cs_x_y.is_outermost())
     {
         length = 0;
-        foreach(cst.get_cs(), cs)
+        unsigned int cs_index = 0;
+
+        enumerate(cs_x.get_cs(), cs, cs_index)
         {
-            if(cst.get_outermost(cs->resource_id) == c.resource_id)
+            if(cs->is_outermost())
+                continue;
+
+            if(cs_x.get_outermost(cs_index) == cs_x_y.resource_id)
                 length += cs->length;
         }
     }
     else
-        length = c.length;
+    {
+        length = cs_x_y.length;
+    }
 
     return length;
 }
 
-static void set_blocking_objective_gipp(
-        VarMapper& vars,
-        const ResourceSharingInfo& info,
-        const TaskInfo& ti,
-        const CriticalSectionsOfTaskset& csts,
-        LinearProgram& lp)
+void PartitionedGIPPLP::set_blocking_objective_gipp()
 {
-    LinearExpression *obj;
+    LinearExpression *obj = get_objective();
+    unsigned int x        = 0;
 
-    obj = lp.get_objective();
-
-    foreach_task_except(info.get_tasks(), ti, tx)
+    enumerate(taskset, tx, x)
     {
-        unsigned int x                      = ti.get_id();
-        const CriticalSectionsOfTask& cs_tx = get_critical_section_of_task(info, csts, *tx);
-        unsigned int overlaping_jobs        = max_overlapping_jobs(ti, *tx);
+        unsigned int overlaping_jobs        = max_overlapping_jobs(*tx);
+        unsigned int y                      = 0;
+        unsigned int cs_index               = 0;
+        const CriticalSectionsOfTask& cst_x = taskset_cs[x];
 
-        foreach(cs_tx.get_cs(), cs)
+        enumerate(cst_x.get_cs(), cs, cs_index)
         {
             if(cs->is_outermost())
             {
-                unsigned int y      = cs->resource_id;
-                unsigned int length = total_length(*cs, cs_tx);
+                unsigned int length = total_length(x, cs_index);
                 for(int v = 0; v < (int) overlaping_jobs; v++)
                 {
                     unsigned int var_id;
@@ -548,60 +586,53 @@ static void set_blocking_objective_gipp(
 
                     var_id = vars.lookup(x, y, v, BLOCKING_RSM);
                     obj->add_term(length, var_id);
-
                 }
+                y++;
             }
         }
     }
 }
 
-static void apply_gipp_bounds_for_task(
-        unsigned int i,
-        BlockingBounds& bounds,
-        const LockSets& ls,
-        const ResourceSharingInfo& info,
-        const CriticalSectionsOfTaskset& cst)
+
+unsigned long PartitionedGIPPLP::solve()
 {
-    LinearProgram lp;
-    VarMapper vars;
-    const TaskInfo& ti = info.get_tasks()[i];
+    Solution *solution;
+    solution = linprog_solve(*this, vars.get_num_vars());
 
-    set_blocking_objective_gipp(vars, info, ti, cst, lp);
-    vars.seal();
+    long result = ceil(solution->evaluate(*get_objective()));
 
-    add_gipp_constraints(vars, ls, info, ti, cst, lp);
+    delete solution;
 
-    Solution *sol = linprog_solve(lp, vars.get_num_vars());
-    assert(sol != NULL);
-
-    Interference total;
-
-    total.total_length = lrint(sol->evaluate(*lp.get_objective()));
-    bounds[i] = total;
-
-    delete sol;
+    return result;
 }
+
 
 static BlockingBounds* _lp_gipp_bounds(
         const ResourceSharingInfo& info,
-        const CriticalSectionsOfTaskset& cst)
+        const CriticalSectionsOfTaskset& cst,
+        unsigned int cpu_num,
+        unsigned int c_size)
 {
     BlockingBounds* results = new BlockingBounds(info);
 
-    LockSets ls = cst.get_resource_groups();
-
     for (unsigned int i = 0; i < info.get_tasks().size(); i++)
-        apply_gipp_bounds_for_task(i, *results, ls, info, cst);
+    {
+        PartitionedGIPPLP lp(info, cst, i, cpu_num, c_size);
+        (*results)[i] = lp.solve();
+    }
 
     return results;
 }
 
 BlockingBounds* lp_gipp_bounds(
         const ResourceSharingInfo& info,
-        const CriticalSectionsOfTaskset& cst)
+        const CriticalSectionsOfTaskset& cst,
+        unsigned int cpu_num,
+        unsigned int c_size)
 {
 
-    BlockingBounds *results = _lp_gipp_bounds(info, cst);
+    BlockingBounds *results = _lp_gipp_bounds(info, cst, cpu_num, c_size);
 
     return results;
 }
+

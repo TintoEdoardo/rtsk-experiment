@@ -95,7 +95,7 @@ LockSets CriticalSectionsOfTaskset::get_resource_groups() const
             {
                 lockSet.insert(*r_ni);
             }
-            resource_groups.insert(lockSet);
+            resource_groups.push_back(lockSet);
         }
     }
 

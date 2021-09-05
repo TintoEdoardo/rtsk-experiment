@@ -146,6 +146,8 @@ bool lp_pedf_lockfree_NP_is_schedulable(const ResourceSharingInfo& info);
 
 BlockingBounds* lp_gipp_bounds(
         const ResourceSharingInfo& info,
-        const CriticalSectionsOfTaskset& cst);
+        const CriticalSectionsOfTaskset& cst,
+        unsigned int cpu_num,
+        unsigned int c_size);
 
 #endif /* LP_ANALYSYS_H_ */

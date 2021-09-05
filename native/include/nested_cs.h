@@ -12,7 +12,7 @@
 class CriticalSectionsOfTask;
 
 typedef std::set<unsigned int> LockSet;
-typedef std::set<LockSet> LockSets;
+typedef std::vector<LockSet> LockSets;
 
 struct CriticalSection
 {
@@ -103,6 +103,24 @@ public:
 
 		return cur;
 	}
+
+	LockSet get_nested_cs_resource(unsigned int cs_index) const
+    {
+	    LockSet nested_rs;
+
+	    // insert cs resource requested
+	    const CriticalSection& cs_i = cs[cs_index];
+        nested_rs.insert(cs_i.resource_id);
+
+        // insert resources from nested requests
+
+        foreach(cs, cs_x)
+        {
+            if(cs_x->outer == (int) cs_i.resource_id)
+                nested_rs.insert(cs_x->resource_id);
+        }
+        return nested_rs;
+    }
 
 };
 
