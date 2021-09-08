@@ -14,8 +14,12 @@ from schedcat.util.time import ms2us
 """
     GENERATE_TASKSET
     Input:
+        taskset configuraton parameters
         
     Output:
+        a tuple of three element, the first is the taskset for GIPP tests,
+        the second the taskset for OMIP tests, the third the taskset for RNLP tests. 
+        [Note. GIPP and RNLP taskset are identical, consider removing the latter]
         
 """
 def generate_taskset(
@@ -44,13 +48,24 @@ def generate_taskset(
     utilization_ls = utilization * (number_of_ls_tasks / number_of_tasks)
     utilization_nls = utilization - utilization_ls
 
+    # Define taskset for experiment:
+    # - RNLP requires a single global lock for all resources in the system,
+    # - OMIP supports coarse-grained locking, therefore nested requests should be implemented
+    #   as group locks,
+    # - GIPP supports fine-grained locking.
+
     # Taskset generation
-    taskset_ls  = gen_emstada.gen_taskset(period_ls, period_ls, number_of_ls_tasks, utilization_ls, scale=ms2us)
-    taskset_nls = gen_emstada.gen_taskset(period_nls, period_nls, number_of_nls_tasks, utilization_nls, scale=ms2us)
+    taskset_ls  \
+        = gen_emstada.gen_taskset(period_ls, period_ls, number_of_ls_tasks, utilization_ls, scale=ms2us)
 
-    t_ls  = res.initialize_nested_resource_model(taskset_ls)
-    t_nls = res.initialize_nested_resource_model(taskset_nls)
+    taskset_nls \
+        = gen_emstada.gen_taskset(period_nls, period_nls, number_of_nls_tasks, utilization_nls, scale=ms2us)
 
+    res.initialize_nested_resource_model(taskset_ls)
+    res.initialize_nested_resource_model(taskset_nls)
+
+    t_ls_gipp  = taskset_ls
+    t_nls_gipp = taskset_nls
 
     # Identify group configuration
     group_conf_nls = "not identified yet"
@@ -112,17 +127,17 @@ def generate_taskset(
     # Generate critical sections for nls tasks.
     # Iterate over resource groups, in order to distinguish between
     # resources accessed in each group
-    number_of_groups = compute_groups_number(n_resources_nls, group_conf_nls)
-    for g in xrange(0, number_of_groups):
+    number_of_groups_nls = compute_groups_number(n_resources_nls, group_conf_nls)
+    for g in xrange(0, number_of_groups_nls):
 
         # Offset over resource index
         group_offset = g * group_conf_nls["resources"]
 
-        for i in xrange(0, len(t_nls)):
+        for i in xrange(0, len(t_nls_gipp)):
 
             if group_associations_nls[i] == g:
 
-                task_i     = t_nls[i]
+                task_i     = t_nls_gipp[i]
                 cs_task_i  = critical_sections_nls[i]
                 csl_task_i = critical_sections_length_nls[i]
 
@@ -140,6 +155,38 @@ def generate_taskset(
                         nested_cs \
                             = task_i.critical_sections.add_nested(outer_cs, res_index, cs_length)
 
+    # Generate critical sections for ls tasks
+    ls_offset           = group_conf_nls["resources"]
 
+    for i in xrange(0, len(t_ls_gipp)):
 
-    return ()
+        task_i     = t_ls_gipp[i]
+        cs_task_i  = critical_sections_ls[i]
+        csl_task_i = critical_sections_length_ls[i]
+
+        for ocs in xrange(0, len(cs_task_i)):
+
+            ocs_length = csl_task_i[ocs][0]
+            o_res_index = cs_task_i[ocs][0] + ls_offset
+            outer_cs \
+                = task_i.critical_sections.add_outermost(o_res_index, ocs_length)
+
+            for cs in xrange(1, len(cs_task_i[ocs])):
+
+                cs_length = csl_task_i[ocs][cs]
+                res_index = cs_task_i[ocs][cs] + ls_offset
+                nested_cs \
+                    = task_i.critical_sections.add_nested(outer_cs, res_index, cs_length)
+
+    # Compute the taskset for GIPP, OMIP and RNLP
+    # GIPP:
+    t_nls_gipp.extend(t_ls_gipp)
+
+    # OMIP
+    t_omip = t_nls_gipp.copy()
+    res.convert_to_group_locks(t_omip)
+
+    # RNLP
+    t_rnlp = t_nls_gipp.copy()
+
+    return t_nls_gipp, t_omip, t_rnlp
