@@ -24,57 +24,39 @@ private:
     ResourceGroup res_groups; // set of resource groups
     OutermostCS outermost_cs; // vector of set containing outermost cs per task
 
-    unsigned int max_overlapping_jobs(const TaskInfo& tx) const
-    {
-        return tx.get_max_num_jobs(ti.get_response());
-    }
-    void configure_outermost_cs()
-    {
-        unsigned int cst_index = 0;
-        enumerate(taskset_cs, cst, cst_index)
-        {
-            foreach(cst->get_cs(), cs)
-            {
-                CriticalSections ocs;
-                if(cs->is_outermost())
-                {
-                    std::cout << "    outer_cs modification" << std::endl;
-                    ocs.push_back(*cs);
-                }
-                outermost_cs.push_back(ocs);
-            }
-        }
-    }
-    unsigned int count_competing_tasks_in_cluster(
-            const LockSet& g,
-            unsigned int k) const;
+    // Utility methods
+    unsigned int max_overlapping_jobs(const TaskInfo& tx) const;
     unsigned int compute_token_waiting_times(const LockSet& g) const;
+    unsigned int count_conflicting_outermost_cs(unsigned int x,
+                                                const LockSet& s) const;
+    unsigned int total_length(unsigned int x,
+                              unsigned int y) const;
+    unsigned int count_competing_tasks_in_cluster(const LockSet& g,
+                                                  unsigned int k) const;
+    unsigned int issued_outermost_request(const LockSet& g) const;
+
+    void configure_outermost_cs();
     LockSets subset_acquired_by_other(const LockSet& g) const;
-    bool cs_is_subset_of_s(
-            unsigned int x,
-            unsigned int y,
-            const LockSet& s) const;
-    bool are_cs_conflicting(
-            const LockSet& ls,
-            const LockSet& ls1) const;
-    unsigned int count_conflicting_outermost_cs(
-            unsigned int x,
-            const LockSet& s) const;
-    unsigned int total_length(
-            unsigned int x,
-            unsigned int y) const;
+    bool cs_is_subset_of_s(unsigned int x,
+                           unsigned int y,
+                           const LockSet& s) const;
+    bool are_cs_conflicting(const LockSet& ls,
+                            const LockSet& ls1) const;
+
+    // Constraints according to [Brandenburg 2020]
     void add_cs_blocking_constraints();
     void add_token_blocking_constraint();
     void add_aggregate_token_blocking_constraint();
     void add_percluster_RSM_constraint();
     void add_detailed_RSM_constraint();
+
+    // Composable methods
     void add_gipp_constraints();
     void set_blocking_objective_gipp();
-    //void apply_gipp_bounds_for_task();
-    unsigned int issued_outermost_request(const LockSet& g) const;
 
 
 public:
+
     PartitionedGIPPLP(
             const ResourceSharingInfo& tsk,
             const CriticalSectionsOfTaskset& tsk_cs,
@@ -82,6 +64,7 @@ public:
             unsigned int cpu_num,
             unsigned int c_size);
 
+    // LP solver invocation here
     unsigned long solve();
 
 };
@@ -112,6 +95,31 @@ PartitionedGIPPLP::PartitionedGIPPLP(
     std::cout << "End constraints" << std::endl;
 }
 
+/* Compute the number of jobs of task T_x
+ * overlapping with the job J_i of T_i. */
+unsigned int PartitionedGIPPLP::max_overlapping_jobs(const TaskInfo& tx) const
+{
+    return tx.get_max_num_jobs(ti.get_response());
+}
+
+/* Compute the sets of outermost critical
+ * sections, grouped by task requesting them. */
+void PartitionedGIPPLP::configure_outermost_cs()
+{
+    unsigned int cst_index = 0;
+    enumerate(taskset_cs, cst, cst_index)
+    {
+        foreach(cst->get_cs(), cs)
+        {
+            CriticalSections ocs;
+            if(cs->is_outermost())
+            {
+                ocs.push_back(*cs);
+            }
+            outermost_cs.push_back(ocs);
+        }
+    }
+}
 
 // Constraint 22 in [Brandenburg 2020]
 // Prevent any blocking critical section from being counted twice.
