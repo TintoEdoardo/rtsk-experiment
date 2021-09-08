@@ -1,13 +1,31 @@
 """
-    Configuration for critical sections and resources management
+    Configuration function for critical sections and resource groups.
 """
+
 import random
+
+
+"""
+    COMPUTE_GROUPS_NUMBER
+        Input: 
+            num_resources - number of resources in the system
+            group_conf - configuration identified by g_size and g_type
+        
+        Output:
+            number of resource groups in the system
+"""
+def compute_groups_number(
+        num_resources,
+        group_conf):
+    num_groups         = num_resources / group_conf["resources"]
+    return num_groups
 
 
 """
     GENERATE_GROUPS
     Input: 
-        num_tasks - number of nls tasks in the system
+        num_tasks - number of tasks in the system
+        num_resources - number of resources in the system
         group_conf - configuration identified by g_size and g_type
         
     Output: 
@@ -16,13 +34,12 @@ import random
 """
 def generate_groups(
         num_tasks,
+        num_resources,
         group_conf):
-    groups_association = []
-    num_groups = 12 / group_conf["resources"]
-    minimal_requests = len(group_conf["minimal_requests"])
 
-    # Check that the group is possible to create
-    assert (num_tasks <= minimal_requests * num_groups)
+    groups_association = []
+    num_groups         = num_resources / group_conf["resources"]
+    minimal_requests   = len(group_conf["minimal_requests"])
 
     # To avoid relocating tasks, we initialize each groups_association
     # value to -1, in order to verify if the task has already been assigned
@@ -68,10 +85,11 @@ def assign_cs(
         groups_association,
         num_tasks,
         max_requests):
-    num_groups = 12 / group_conf["resources"]
+
+    num_groups        = 12 / group_conf["resources"]
     critical_sections = []
 
-    # Assign critical sections an populate
+    # Assign critical sections and populate
     # the array critical_sections
     for g in xrange(0, num_groups):
 

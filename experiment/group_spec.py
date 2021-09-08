@@ -1,7 +1,7 @@
 """
     Specification for some resource groups.
     They are used to replicate the four experimental graph in
-    [Brandenburg 2020]
+    [Brandenburg 2020].
 """
 
 """
@@ -11,13 +11,6 @@
         nn_requests      - non-nested requests a task may issue in a group
         n_requests       - nested requests a task may issue in a group
 """
-group_3_wide = dict()
-# Top level resources = [0, 1]
-# Other resources     = [2]
-group_3_wide["resources"] = 3
-group_3_wide["minimal_requests"] = [(0, 2), (1, 2)]
-group_3_wide["nn_requests"] = [(0,), (1,), (2,)]
-group_3_wide["n_requests"] = group_3_wide["minimal_requests"]
 
 group_1 = dict()
 # Top level resources = [0]
@@ -26,6 +19,22 @@ group_1["resources"] = 1
 group_1["minimal_requests"] = [(0,)]
 group_1["nn_requests"] = [(0,)]
 group_1["n_requests"] = []
+
+group_3_wide = dict()
+# Top level resources = [0, 1]
+# Other resources     = [2]
+group_3_wide["resources"] = 3
+group_3_wide["minimal_requests"] = [(0, 2), (1, 2)]
+group_3_wide["nn_requests"] = [(0,), (1,), (2,)]
+group_3_wide["n_requests"] = group_3_wide["minimal_requests"]
+
+group_3_deep = dict()
+# Top level resources = [0]
+# Other resources     = [1, 2]
+group_3_deep["resources"] = 3
+group_3_deep["minimal_requests"] = [(0, 1), (0, 2)]
+group_3_deep["nn_requests"] = [(0,), (1,), (2,)]
+group_3_deep["n_requests"] = group_3_deep["minimal_requests"] + [(1, 2)]
 
 group_4_deep = dict()
 # Top level resources = [0]
