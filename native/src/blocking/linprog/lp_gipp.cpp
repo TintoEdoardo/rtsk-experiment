@@ -36,6 +36,8 @@ private:
     unsigned int issued_outermost_request(const LockSet& g) const;
 
     void configure_outermost_cs();
+    void impose_single_group_constraint();
+
     LockSets subset_acquired_by_other(const LockSet& g) const;
     bool cs_is_subset_of_s(unsigned int x,
                            unsigned int y,
@@ -62,7 +64,8 @@ public:
             const CriticalSectionsOfTaskset& tsk_cs,
             int task_under_analysis,
             unsigned int cpu_num,
-            unsigned int c_size);
+            unsigned int c_size,
+            bool are_res_in_single_group = false);
 
     // LP solver invocation here
     unsigned long solve();
@@ -74,7 +77,8 @@ PartitionedGIPPLP::PartitionedGIPPLP(
         const CriticalSectionsOfTaskset& tsk_cs,
         int task_under_analysis,
         unsigned int cpu_num,
-        unsigned int c_size)
+        unsigned int c_size,
+        bool are_res_in_single_group)
       : i(task_under_analysis),
         ti(tsk.get_tasks()[i]),
         csi(tsk_cs.get_tasks()[i]),
@@ -85,14 +89,16 @@ PartitionedGIPPLP::PartitionedGIPPLP(
         res_groups(tsk_cs.get_resource_groups()),
         outermost_cs()
 {
-    std::cout << "Enter constructor" << std::endl;
+    if(are_res_in_single_group)
+        impose_single_group_constraint();
+
     configure_outermost_cs();
-    std::cout << "End outer_cs creation" << std::endl;
+
     set_blocking_objective_gipp();
-    std::cout << "End obj creation" << std::endl;
+
     vars.seal();
+
     add_gipp_constraints();
-    std::cout << "End constraints" << std::endl;
 }
 
 /* Compute the number of jobs of task T_x
@@ -119,6 +125,25 @@ void PartitionedGIPPLP::configure_outermost_cs()
             outermost_cs.push_back(ocs);
         }
     }
+}
+
+// To adapt GIPP analysis to RNLP.
+void PartitionedGIPPLP::impose_single_group_constraint()
+{
+    unsigned int g_index = 0;
+    ResourceGroup single_group_rg;
+    LockSet single_group;
+
+    // Create a single group for all resources merging
+    // the previous generated groups.
+    enumerate(res_groups, g, g_index)
+    {
+        single_group.insert(g->begin(), g->end());
+    }
+
+    single_group_rg.push_back(single_group);
+
+    res_groups = single_group_rg;
 }
 
 // Constraint 22 in [Brandenburg 2020]
@@ -619,13 +644,14 @@ static BlockingBounds* _lp_gipp_bounds(
         const ResourceSharingInfo& info,
         const CriticalSectionsOfTaskset& cst,
         unsigned int cpu_num,
-        unsigned int c_size)
+        unsigned int c_size,
+        bool are_res_in_single_group = false)
 {
     BlockingBounds* results = new BlockingBounds(info);
 
     for (unsigned int i = 0; i < info.get_tasks().size(); i++)
     {
-        PartitionedGIPPLP lp(info, cst, i, cpu_num, c_size);
+        PartitionedGIPPLP lp(info, cst, (int) i, cpu_num, c_size, are_res_in_single_group);
         (*results)[i] = lp.solve();
     }
 
@@ -636,10 +662,11 @@ BlockingBounds* lp_gipp_bounds(
         const ResourceSharingInfo& info,
         const CriticalSectionsOfTaskset& cst,
         unsigned int cpu_num,
-        unsigned int c_size)
+        unsigned int c_size,
+        bool are_res_in_single_group = false)
 {
 
-    BlockingBounds *results = _lp_gipp_bounds(info, cst, cpu_num, c_size);
+    BlockingBounds *results = _lp_gipp_bounds(info, cst, cpu_num, c_size, are_res_in_single_group);
 
     return results;
 }

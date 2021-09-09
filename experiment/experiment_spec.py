@@ -44,3 +44,7 @@ experiments = [
     experiment_3,
     experiment_4
 ]
+
+# Cluster size
+cluster_size = 1
+
