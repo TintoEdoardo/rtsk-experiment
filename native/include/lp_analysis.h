@@ -148,6 +148,8 @@ BlockingBounds* lp_gipp_bounds(
         const ResourceSharingInfo& info,
         const CriticalSectionsOfTaskset& cst,
         unsigned int cpu_num,
-        unsigned int c_size);
+        unsigned int c_size,
+        unsigned int res_num,
+        bool apply_to_rnlp);
 
 #endif /* LP_ANALYSYS_H_ */

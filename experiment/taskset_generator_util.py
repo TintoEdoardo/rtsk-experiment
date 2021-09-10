@@ -37,14 +37,11 @@ def generate_groups(
         num_resources,
         group_conf):
 
-    groups_association = []
-    num_groups         = num_resources / group_conf["resources"]
-    minimal_requests   = len(group_conf["minimal_requests"])
-
     # To avoid relocating tasks, we initialize each groups_association
     # value to -1, in order to verify if the task has already been assigned
-    for i in xrange(0, num_tasks, 1):
-        groups_association[1] = -1
+    groups_association = [-1 for _ in range(0, num_tasks, 1)]
+    num_groups         = num_resources / group_conf["resources"]
+    minimal_requests   = len(group_conf["minimal_requests"])
 
     # Then we assign to each groups a minimal set of tasks
     for i in xrange(0, num_groups, 1):
@@ -61,7 +58,7 @@ def generate_groups(
     for t in xrange(0, num_tasks, 1):
 
         if groups_association[t] == -1:
-            groups_association[t] = random.randint(0, num_groups)
+            groups_association[t] = random.randint(0, num_groups - 1)
 
     return groups_association
 
@@ -84,17 +81,18 @@ def assign_cs(
         group_conf,
         groups_association,
         num_tasks,
-        max_requests):
+        max_requests,
+        num_resource):
 
-    num_groups        = 12 / group_conf["resources"]
-    critical_sections = []
+    num_groups        = num_resource / group_conf["resources"]
+    critical_sections = [[] for _ in range(0, num_tasks)]
 
     # Assign critical sections and populate
     # the array critical_sections
     for g in xrange(0, num_groups):
 
         current_minimal_req_index = 0
-        last_minimal_req_index = len(group_conf["minimal_requests"]) - 1
+        last_minimal_req_index = len(group_conf["minimal_requests"])
 
         for t in xrange(0, num_tasks):
 
@@ -104,10 +102,11 @@ def assign_cs(
 
                 for n in xrange(0, max_requests):
 
+                    cs = None
+
                     # Minimal requests needed
                     if current_minimal_req_index < last_minimal_req_index:
-                        critical_sections[t][n] \
-                            = group_conf["minimal_requests"][current_minimal_req_index]
+                        cs = group_conf["minimal_requests"][current_minimal_req_index]
 
                         current_minimal_req_index \
                             = current_minimal_req_index + 1
@@ -119,13 +118,13 @@ def assign_cs(
                             nn_request_index \
                                 = random.randint(0, len(group_conf["nn_requests"]) - 1)
 
-                            critical_sections[t][n] \
-                                = group_conf["nn_requests"][nn_request_index]
+                            cs = group_conf["nn_requests"][nn_request_index]
                         else:
                             request_index \
                                 = random.randint(0, len(group_conf["n_requests"]) - 1)
 
-                            critical_sections[t][n] \
-                                = group_conf["n_requests"][request_index]
+                            cs = group_conf["n_requests"][request_index]
+
+                    critical_sections[t].append(cs)
 
     return critical_sections

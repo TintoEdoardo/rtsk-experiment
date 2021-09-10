@@ -2,7 +2,7 @@
     Utility functions for the experiments.
 """
 from schedcat.locking.bounds import assign_edf_preemption_levels
-from schedcat.mapping.binpack import worst_fit, report_failure
+from schedcat.mapping.binpack import worst_fit, report_failure, DidNotFit
 from schedcat.model.tasks import TaskSystem
 from schedcat.sched.edf import is_schedulable
 
@@ -37,29 +37,33 @@ def perform_schedulability_test(
     # Then we should provide a partition
     # for each task, and possibly distribute
     # utilization fairly between processors
-    def weight_fun(task):
-        return task.utilization
+    weight_fun = lambda task: task.utilization()
 
-    partitions \
-        = worst_fit(taskset, n_cluster, cluster_size, weight_fun, misfit=report_failure, empty_bin=TaskSystem)
-
-    for cluster_index in xrange(0, len(partitions)):
-
-        for t in partitions(cluster_index):
-            t.partition = cluster_index
-
-    # We apply the apply_sched_bounds function
-    # on the taskset
-    apply_sched_bounds(taskset, n_cpu, cluster_size)
-
-    # Perform schedulability test,
-    # being the taskset partitioned, we can perform
-    # feasibility test for each cluster
     is_taskset_schedulable = True
-    for p in partitions:
 
-        if not is_schedulable(cluster_size, p, rta_min_step=1000):
-            is_taskset_schedulable = False
+    try:
+        partitions \
+            = worst_fit(taskset, n_cluster, cluster_size, weight_fun, misfit=report_failure, empty_bin=TaskSystem)
+
+        for cluster_index in xrange(0, len(partitions)):
+
+            for t in partitions[cluster_index]:
+                t.partition = cluster_index
+
+        # We apply the apply_sched_bounds function
+        # to the taskset
+        apply_sched_bounds(taskset, n_cpu, cluster_size)
+
+        # Perform schedulability test,
+        # being the taskset partitioned, we can perform
+        # feasibility test for each cluster
+        for p in partitions:
+
+            if not is_schedulable(cluster_size, p, rta_min_step=1000):
+                is_taskset_schedulable = False
+
+    except DidNotFit:
+        is_taskset_schedulable = False
 
     return is_taskset_schedulable
 

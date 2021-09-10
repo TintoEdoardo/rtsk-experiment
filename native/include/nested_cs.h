@@ -154,10 +154,6 @@ public:
 	 * transitively requested while holding 'q'. */
 	hashmap<unsigned int, hashset<unsigned int> >
 	get_transitive_nesting_relationship() const;
-
-	/* Compute the set of resource groups in the system.
-	 * Each group is disjoint. */
-	LockSets get_resource_groups() const;
 };
 
 

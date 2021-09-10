@@ -19,7 +19,7 @@ group_1["resources"]        = 1
 group_1["type"]             = ""
 group_1["minimal_requests"] = [(0,)]
 group_1["nn_requests"]      = [(0,)]
-group_1["n_requests"]       = []
+group_1["n_requests"]       = group_1["nn_requests"]    # Is not acceptable to have an empty set of request
 
 group_3_deep = dict()
 # Top level resources = [0]

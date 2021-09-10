@@ -666,9 +666,9 @@ def pedf_msrp_classic_is_schedulable(all_tasks, num_cpus):
     return cpp.pedf_msrp_classic_is_schedulable(model, num_cpus)
 
 
-def apply_gipp_bounds(all_tasks, num_cpus, pros_per_cluster, are_res_in_single_group):
+def apply_gipp_bounds(all_tasks, num_cpus, proc_per_cluster, are_res_in_single_group=False):
     model = get_cpp_model(all_tasks, no_requests=True)
     cs_model = get_cpp_nested_cs_model(all_tasks)
-    res = lp_cpp.lp_gipp_bounds(model, cs_model, num_cpus, pros_per_cluster, are_res_in_single_group)
+    res = lp_cpp.lp_gipp_bounds(model, cs_model, num_cpus, proc_per_cluster, are_res_in_single_group)
     apply_suspension_oblivious(all_tasks, res)
     return res

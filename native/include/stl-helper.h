@@ -61,5 +61,12 @@ bool is_subset_of(const Set1 &set1, const Set2 &set2)
 	                     set1.begin(), set1.end());
 }
 
+template<class T>
+T get_union(const T& set1, const T& set2)
+{
+    T res = set1;
+    res.insert(set2.begin(), set2.end());
+    return res;
+}
 
 #endif
