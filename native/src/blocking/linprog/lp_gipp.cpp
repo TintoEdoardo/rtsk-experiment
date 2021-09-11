@@ -8,6 +8,7 @@ typedef std::vector<std::vector<unsigned int > > Phi_i_g;
 typedef std::vector<std::vector<unsigned int > > Beta_k_k;
 typedef std::vector<unsigned int > TaskToResGroup;
 typedef std::vector<unsigned int > WaitForToken;
+typedef std::vector<std::vector<unsigned int > > LengthOutermostCS;
 
 class PartitionedGIPPLP : protected LinearProgram
 {
@@ -34,21 +35,19 @@ private:
     WaitForToken W_i_g;
     TaskToResGroup task_to_group;
     ResourceGroup res_acquired_by_other;
+    LengthOutermostCS length_outermost_cs;
 
     // Utility methods
     unsigned int max_overlapping_jobs(const TaskInfo& tx) const;
     void compute_token_waiting_times();
     unsigned int count_conflicting_outermost_cs(const LockSet& s) const;
-    unsigned int total_length(unsigned int x,
-                              unsigned int y) const;
-    unsigned int count_competing_tasks_in_cluster(const LockSet& g,
-                                                  unsigned int k) const;
-    unsigned int issued_outermost_request(const LockSet& g) const;
+    //unsigned int total_length(unsigned int x, unsigned int y) const;
+
+    //unsigned int count_competing_tasks_in_cluster(const LockSet& g,unsigned int k) const;
+    //unsigned int issued_outermost_request(const LockSet& g) const;
 
     void compute_subset_acquired_by_other();
-    bool cs_is_subset_of_s(unsigned int x,
-                           unsigned int y,
-                           const LockSet& s) const;
+    // bool cs_is_subset_of_s(unsigned int x, unsigned int y, const LockSet& s) const;
     bool are_cs_possibly_conflicting(const LockSet& ls,
                                      const LockSet& ls1) const;
 
@@ -76,7 +75,8 @@ public:
             unsigned int c_size,
             Phi_i_g p,
             Beta_k_k b,
-            TaskToResGroup ttg);
+            TaskToResGroup ttg,
+            LengthOutermostCS l_ocs);
 
     // LP solver invocation here
     unsigned long solve();
@@ -93,7 +93,8 @@ PartitionedGIPPLP::PartitionedGIPPLP(
         unsigned int c_size,
         Phi_i_g ps,
         Beta_k_k bs,
-        TaskToResGroup ttg)
+        TaskToResGroup ttg,
+        LengthOutermostCS l_ocs)
       : i(task_under_analysis),
         ti(tsk.get_tasks()[i]),
         csi(tsk_cs.get_tasks()[i]),
@@ -106,10 +107,12 @@ PartitionedGIPPLP::PartitionedGIPPLP(
         phi(ps),
         beta(bs),
         task_to_group(ttg),
-        res_acquired_by_other()
+        res_acquired_by_other(),
+        length_outermost_cs(l_ocs)
 {
 
     compute_token_waiting_times();
+
     compute_subset_acquired_by_other();
 
     set_blocking_objective_gipp();
@@ -248,7 +251,9 @@ void PartitionedGIPPLP::compute_token_waiting_times()
 
         if(beta[k][g_index] < cluster_size)
         {
+
             W_i_g[g_index] = 0;
+
         }
         else
         {
@@ -257,6 +262,7 @@ void PartitionedGIPPLP::compute_token_waiting_times()
             unsigned int tx_index;
             enumerate(taskset, tx, tx_index)
             {
+
                 /* Skip itself. */
                 if(tx_index == (unsigned) i)
                 {
@@ -343,7 +349,6 @@ void PartitionedGIPPLP::add_aggregate_token_blocking_constraint()
     enumerate(res_groups, group, g_index)
     {
 
-        unsigned int cluster_ti     = ti.get_cluster();
         unsigned int cluster_number = cpu_number / cluster_size;
 
         /* Iterate over each clusters. */
@@ -433,7 +438,7 @@ void PartitionedGIPPLP::add_percluster_RSM_constraint()
                 }
 
                 /* Exclude tasks in other clusters. */
-                if(tx->get_cluster() != k)
+                if((int) tx->get_cluster() != k)
                 {
                     continue;
                 }
@@ -531,7 +536,7 @@ void PartitionedGIPPLP::compute_subset_acquired_by_other()
 
 }
 
-// Check if resources accessed in cs are a subset of s.
+/* Check if resources accessed in cs are a subset of s.
 bool PartitionedGIPPLP::cs_is_subset_of_s(
         unsigned int x,
         unsigned int y,
@@ -544,25 +549,8 @@ bool PartitionedGIPPLP::cs_is_subset_of_s(
     // LockSet for nested resources in cs.
     LockSet cs_lockset = css_x.get_nested_cs_resource(y);
 
-    /*
-    // Insert cs resource into his lockset.
-    cs_lockset.insert(cs_x_y.resource_id);
-
-    // Insert nested resources.
-    unsigned int cs_index = 0;
-    enumerate(css_x.get_cs(), cs, cs_index)
-    {
-        if(!cs->is_outermost())
-        {
-            if(css_x.get_outermost(cs_index) == cs_x_y.resource_id)
-            {
-                cs_lockset.insert(cs->resource_id);
-            }
-        }
-    }*/
-
     return is_subset_of(cs_lockset, s);
-}
+} */
 
 /* Check if ls an ls1 are possibly conflicting. */
 bool PartitionedGIPPLP::are_cs_possibly_conflicting(
@@ -648,9 +636,6 @@ void PartitionedGIPPLP::add_detailed_RSM_constraint()
             for(int k = 0; k < (int) cluster_number; k++)
             {
 
-                //unsigned int possibly_conflicting_cs = count_conflicting_outermost_cs(i, *s);
-                //unsigned int competing_tasks         = count_competing_tasks_in_cluster(*g, k);
-
                 LinearExpression *exp = new LinearExpression();
                 unsigned int var_id;
 
@@ -673,11 +658,20 @@ void PartitionedGIPPLP::add_detailed_RSM_constraint()
                     unsigned int overlapping_jobs = max_overlapping_jobs(*tx);
                     unsigned int x                = tx_index;
                     unsigned int y                = 0;
+                    unsigned int cs_index;
 
-                    enumerate(outermost_cs[x], ocs, y)
+                    enumerate(taskset_cs[x].get_cs(), cs, cs_index)
                     {
 
-                        if(cs_is_subset_of_s(x, y, *s))
+                        /* Exclude nested critical sections. */
+                        if(!cs->is_outermost())
+                        {
+                            continue;
+                        }
+
+                        LockSet s_x_y = taskset_cs[x].get_nested_cs_resource(cs_index);
+
+                        if(is_subset_of(s_x_y, *s))
                         {
 
                             for(int v = 0; v < (int) overlapping_jobs; v++)
@@ -689,6 +683,9 @@ void PartitionedGIPPLP::add_detailed_RSM_constraint()
                             }
 
                         }
+
+                        y++;
+
                     }
 
                 }
@@ -726,10 +723,14 @@ void PartitionedGIPPLP::add_gipp_constraints()
     add_detailed_RSM_constraint();
 }
 
+/* Compute a tight upper bound on the length of
+ * the yth outermost critical section of a job
+ * of the xth task.
 unsigned int PartitionedGIPPLP::total_length(
         unsigned int x,
         unsigned int y) const
 {
+
     unsigned int length;
 
     const CriticalSectionsOfTask& cs_x = taskset_cs[x];
@@ -755,27 +756,40 @@ unsigned int PartitionedGIPPLP::total_length(
     }
 
     return length;
-}
+} */
 
 void PartitionedGIPPLP::set_blocking_objective_gipp()
 {
-    LinearExpression *obj = get_objective();
-    unsigned int x        = 0;
 
-    enumerate(taskset, tx, x)
+    LinearExpression *obj = get_objective();
+    unsigned int tx_index;
+
+    enumerate(taskset, tx, tx_index)
     {
+
+        /* Exclude the tas under test. */
+        if((int)tx_index == i)
+        {
+            continue;
+        }
+
         unsigned int overlaping_jobs        = max_overlapping_jobs(*tx);
+        unsigned int x                      = tx_index;
         unsigned int y                      = 0;
         unsigned int cs_index               = 0;
         const CriticalSectionsOfTask& cst_x = taskset_cs[x];
 
         enumerate(cst_x.get_cs(), cs, cs_index)
         {
+
             if(cs->is_outermost())
             {
-                unsigned int length = total_length(x, cs_index);
+
+                unsigned int length = length_outermost_cs[x][y];
+
                 for(int v = 0; v < (int) overlaping_jobs; v++)
                 {
+
                     unsigned int var_id;
 
                     var_id = vars.lookup(x, y, v, BLOCKING_TOKEN);
@@ -783,16 +797,23 @@ void PartitionedGIPPLP::set_blocking_objective_gipp()
 
                     var_id = vars.lookup(x, y, v, BLOCKING_RSM);
                     obj->add_term(length, var_id);
+
                 }
+
                 y++;
+
             }
+
         }
+
     }
+
 }
 
 
 unsigned long PartitionedGIPPLP::solve()
 {
+
     Solution *solution;
     solution = linprog_solve(*this, vars.get_num_vars());
 
@@ -801,6 +822,7 @@ unsigned long PartitionedGIPPLP::solve()
     delete solution;
 
     return result;
+
 }
 
 
@@ -946,20 +968,36 @@ void initialize_taskset_constants(
         const ResourceSharingInfo& info,
         const CriticalSectionsOfTaskset& cst,
         const ResourceGroup& rgs,
-        const unsigned int n_res,
         const unsigned int n_clusters,
-        Phi_i_g phi_i_g,
-        Beta_k_k beta_k_g,
-        TaskToResGroup task_to_group)
+        Phi_i_g& phi_i_g,
+        Beta_k_k& beta_k_g,
+        TaskToResGroup& task_to_group,
+        LengthOutermostCS& l_ocs)
 {
 
     unsigned int n_groups = rgs.size();
+    unsigned int n_res;
 
     /* Initialize some structures to ease
      * the further computations.
      * resources_to_groups is a vector where the nth
      * element corresponds to the index of the group
      * to which it is associated. */
+    std::set<unsigned int> res;
+    foreach(cst.get_tasks(), t_cs)
+    {
+
+        foreach(t_cs->get_cs(), cs)
+        {
+
+            /* If cs-resource_id has been already inserted,
+             * insert method avoid duplication. */
+            res.insert(cs->resource_id);
+
+        }
+
+    }
+    n_res = res.size();
     std::vector <unsigned  int> resources_to_groups;
     resources_to_groups = std::vector <unsigned  int>(n_res, 0);
     for(unsigned int g_index = 0; g_index < n_groups; g_index++)
@@ -986,6 +1024,14 @@ void initialize_taskset_constants(
     /* Initialize task_to_group. */
     task_to_group = std::vector<unsigned int >(info.get_tasks().size());
 
+    /* Initialize l_ocs. */
+    for(unsigned int t = 0; t < info.get_tasks().size(); t++)
+    {
+
+        l_ocs.push_back(std::vector<unsigned int>());
+
+    }
+
     const TaskInfos& tasks = info.get_tasks();
 
     unsigned int tx_index;
@@ -999,6 +1045,7 @@ void initialize_taskset_constants(
         phi_i_g.push_back(std::vector<unsigned int>(n_groups, 0));
 
         unsigned int tx_cluster         = tx->get_cluster();
+        unsigned int y                  = 0;
         bool has_tx_contributed_to_beta = false;
         bool has_tx_contributed_to_ttg  = false;
 
@@ -1007,7 +1054,41 @@ void initialize_taskset_constants(
         {
 
             unsigned int g_index = resources_to_groups[cs->resource_id];
-            phi_i_g[tx_index][g_index]++;
+
+            /* Phi counts only outermost request. */
+            if(cs->is_outermost())
+            {
+                phi_i_g[tx_index][g_index]++;
+
+                l_ocs[tx_index].push_back(cs->length);
+
+                /* Iterate on critical sections again. */
+                unsigned int cs_index_2;
+                enumerate(tx_cs.get_cs(), cs_2, cs_index_2)
+                {
+
+                    int outer_index = tx_cs.get_outermost(cs_index_2);
+
+                    /* Exclude outermost critical sections. */
+                    if(outer_index == -1)
+                    {
+                        continue;
+                    }
+
+                    /* Exclude critical sections that are nested
+                     * to other outermost critical sections. */
+                    if(outer_index != (int) cs_index)
+                    {
+                        continue;
+                    }
+
+                    l_ocs[tx_index][y] += cs_2->length;
+
+                }
+
+                y++;
+
+            }
 
             if(!has_tx_contributed_to_beta)
             {
@@ -1024,6 +1105,41 @@ void initialize_taskset_constants(
         }
 
     }
+/*
+    //DEBUG
+    std::cout << "beta = " << std::endl << " { " ;
+    for(unsigned int i = 0; i < beta_k_g.size(); i++)
+    {
+        std::cout << " [ ";
+        for(auto j = beta_k_g[i].begin(); j != beta_k_g[i].end(); j++)
+        {
+            std::cout << *j << ' ';
+        }
+        std::cout << " ] ";
+    }
+    std::cout << " } " << std::endl;
+
+    //DEBUG
+    std::cout << "phi = " << std::endl << " { " ;
+    for(unsigned int i = 0; i < phi_i_g.size(); i++)
+    {
+        std::cout << " [ ";
+        for(auto j = phi_i_g[i].begin(); j != phi_i_g[i].end(); j++)
+        {
+            std::cout << *j << ' ';
+        }
+        std::cout << " ] ";
+    }
+    std::cout << " } " << std::endl;
+
+    //DEBUG
+    std::cout << "task_to_group = " << std::endl << " { " ;
+    for(unsigned int i = 0; i < task_to_group.size(); i++)
+    {
+        std::cout << task_to_group[i] << " ";
+    }
+    std::cout << " } " << std::endl; */
+
 }
 
 BlockingBounds* lp_gipp_bounds(
@@ -1031,7 +1147,6 @@ BlockingBounds* lp_gipp_bounds(
         const CriticalSectionsOfTaskset& cst,
         unsigned int cpu_num,
         unsigned int c_size,
-        unsigned int res_num,
         bool apply_to_rnlp = false)
 {
 
@@ -1041,6 +1156,9 @@ BlockingBounds* lp_gipp_bounds(
     ResourceGroup r_group;
     OutermostCS outer_cs;
     TaskToResGroup task_to_group;
+    Phi_i_g phi;
+    Beta_k_k beta;
+    LengthOutermostCS l_ocs;
 
     /* To adapt GIPP analysis to RNLP we
      * must ensure that all resources belong
@@ -1050,21 +1168,19 @@ BlockingBounds* lp_gipp_bounds(
     else
         generate_resource_groups(info.get_tasks(), cst.get_tasks(), r_group);
 
-    // Initialize outer_cs
+    /* Initialize outer_cs. */
     generate_outer_cs_group(cst, outer_cs);
 
-    /* Generate constants. */
-    Phi_i_g phi;
-    Beta_k_k beta;
+    /* Initialize constants. */
     initialize_taskset_constants(
             info,
             cst,
             r_group,
-            res_num,
             cpu_num / c_size,
             phi,
             beta,
-            task_to_group);
+            task_to_group,
+            l_ocs);
 
 /*
     std::cout << "resource_groups = " << std::endl << " { " ;
@@ -1096,7 +1212,7 @@ BlockingBounds* lp_gipp_bounds(
      * done exactly once per taskset. */
     for (unsigned int i = 0; i < info.get_tasks().size(); i++)
     {
-        PartitionedGIPPLP lp(info, cst, r_group, outer_cs, (int) i, cpu_num, c_size, phi, beta, task_to_group);
+        PartitionedGIPPLP lp(info, cst, r_group, outer_cs, (int) i, cpu_num, c_size, phi, beta, task_to_group, l_ocs);
         (*results)[i] = lp.solve();
     }
 
