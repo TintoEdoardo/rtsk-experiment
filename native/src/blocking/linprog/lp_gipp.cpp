@@ -37,6 +37,7 @@ private:
     WaitForToken W_i_g;
     TaskToResGroup task_to_group;
     ResourceGroup res_acquired_by_other;
+
     LengthOutermostCS length_outermost_cs;
 
     // Utility methods
@@ -675,7 +676,7 @@ void PartitionedGIPPLP::set_blocking_objective_gipp()
             if(cs->is_outermost())
             {
 
-                unsigned int length = length_outermost_cs[x][y];
+                unsigned int length = cs->length;
 
                 for(int v = 0; v < (int) overlaping_jobs; v++)
                 {
@@ -873,7 +874,7 @@ void initialize_taskset_constants(
      * resources_to_groups is a vector where the nth
      * element corresponds to the index of the group
      * to which it is associated. */
-    std::set<unsigned int> res;
+    std::set<unsigned int> resources;
     foreach(cst.get_tasks(), t_cs)
     {
 
@@ -882,12 +883,12 @@ void initialize_taskset_constants(
 
             /* If cs-resource_id has been already inserted,
              * insert method avoid duplication. */
-            res.insert(cs->resource_id);
+            resources.insert(cs->resource_id);
 
         }
 
     }
-    n_res = res.size();
+    n_res = resources.size();
     std::vector <unsigned  int> resources_to_groups;
     resources_to_groups = std::vector <unsigned  int>(n_res, 0);
     for(unsigned int g_index = 0; g_index < n_groups; g_index++)

@@ -10,6 +10,7 @@ experiment_1["tasks_number"]    = 24
 experiment_1["ls_tasks_number"] = 4
 experiment_1["group_conf"]      = (3, "wide")
 experiment_1["max_request"]     = 1
+experiment_1["resources_nls"]   = 12
 
 experiment_2 = dict()
 experiment_2["cpu_number"]      = 4
@@ -18,6 +19,7 @@ experiment_2["tasks_number"]    = 12
 experiment_2["ls_tasks_number"] = 0
 experiment_2["group_conf"]      = (1, "none")
 experiment_2["max_request"]     = 3
+experiment_2["resources_nls"]   = 12
 
 experiment_3 = dict()
 experiment_3["cpu_number"]      = 8
@@ -26,6 +28,7 @@ experiment_3["tasks_number"]    = 24
 experiment_3["ls_tasks_number"] = 0
 experiment_3["group_conf"]      = (4, "deep")
 experiment_3["max_request"]     = 3
+experiment_3["resources_nls"]   = 12
 
 experiment_4 = dict()
 experiment_4["cpu_number"]      = 4
@@ -34,6 +37,7 @@ experiment_4["tasks_number"]    = 4
 experiment_4["ls_tasks_number"] = 0
 experiment_4["group_conf"]      = (4, "wide")
 experiment_4["max_request"]     = 10
+experiment_4["resources_nls"]   = 4
 
 
 # Experiment array

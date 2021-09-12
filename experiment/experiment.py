@@ -15,9 +15,9 @@ from schedcat.locking.bounds import apply_omip_bounds, apply_gipp_bounds, assign
 
 def run_experiment():
 
-    # For each mcsl point, 200 samples are computed,
-    # therefore each interval of 5 values contains 1000 samples
-    n_sample        = 2
+    # For each mcsl point, 20 samples are computed,
+    # therefore each interval of 5 values contains 100 samples
+    n_sample        = 40
     mcsl_range      = taskset_const["cs_length_nls_range"]
     mcsl_big_step   = taskset_const["mcsl_step"]
     mcsl_small_step = 1
@@ -31,7 +31,8 @@ def run_experiment():
     print("-------")
 
     # Iterates over experiment configurations
-    for e_index in range(0, len(experiments)):
+    # for e_index in range(0, len(experiments)):
+    for e_index in range(0, 1):
 
         # Computed samples
         gipp_samples = []
@@ -67,14 +68,14 @@ def run_experiment():
                         e["cpu_number"],
                         e["group_conf"][0],
                         e["group_conf"][1],
-                        (mcsl_range[0], v),
+                        (1, v),
                         taskset_const["cs_len_ls_range"],
                         e["max_request"],
                         taskset_const["max_issued_req_ls"],
                         taskset_const["period_ls"],
                         taskset_const["period_nls"],
                         taskset_const["resources_ls"],
-                        taskset_const["resources_nls"])
+                        e["resources_nls"])
 
                     # Define functions for bounds evaluation
                     gipp_eval_func = apply_gipp_bounds

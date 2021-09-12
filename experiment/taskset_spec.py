@@ -32,5 +32,6 @@ taskset_const["period_nls"]          = [10, 20, 25, 40, 50, 100, 125, 200, 250, 
 taskset_const["cs_length_nls_range"] = (5, 1000)
 taskset_const["mcsl_step"]           = 5
 taskset_const["resources_nls"]       = 12
+taskset_const["resources_nls_min"]   = 4
 taskset_const["max_issued_req_nls"]  = 3
 
