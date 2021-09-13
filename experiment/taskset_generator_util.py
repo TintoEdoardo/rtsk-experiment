@@ -71,6 +71,7 @@ def generate_groups(
             element is the index of the group for the nth task
         num_tasks - number of nls tasks in the system
         max_requests - max number of issued requests
+        num_resources - number of shared resources
         
     Output:
         array of critical sections, where the nth element contains
@@ -82,9 +83,9 @@ def assign_cs(
         groups_association,
         num_tasks,
         max_requests,
-        num_resource):
+        num_resources):
 
-    num_groups        = num_resource / group_conf["resources"]
+    num_groups        = num_resources / group_conf["resources"]
     critical_sections = [[] for _ in range(0, num_tasks)]
 
     requests = sum(max_requests)
@@ -142,6 +143,7 @@ def assign_cs(
             element is the index of the group for the nth task
         num_tasks - number of nls tasks in the system
         max_requests - max number of issued requests
+        num_resources - number of shared resources
         
     Output:
         array of critical sections, where the nth element contains
@@ -155,9 +157,9 @@ def assign_cs_asymmetric(
         groups_association,
         num_tasks,
         max_requests,
-        num_resource):
+        num_resources):
 
-    num_groups        = num_resource / group_conf["resources"]
+    num_groups        = num_resources / group_conf["resources"]
     critical_sections = [[] for _ in range(0, num_tasks)]
 
     # Assign critical sections and populate

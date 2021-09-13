@@ -5,7 +5,7 @@
 typedef std::vector<LockSet> ResourceGroup;
 typedef std::vector<CriticalSections > OutermostCS;
 typedef std::vector<std::vector<unsigned int > > Phi_i_g;
-typedef std::vector<std::vector<unsigned int > > Beta_k_k;
+typedef std::vector<std::vector<unsigned int > > Beta_k_g;
 typedef std::vector<unsigned int > TaskToResGroup;
 typedef std::vector<unsigned int > WaitForToken;
 typedef std::vector<std::vector<unsigned int > > LengthOutermostCS;
@@ -19,28 +19,35 @@ private:
 
     VarMapper vars;
 
+    /* Index of the task under test. */
     const int i;
     const TaskInfo& ti;
     const CriticalSectionsOfTask& csi;
     const TaskInfos& taskset;
     const CriticalSectionsOfTasks& taskset_cs;
 
-    const unsigned int cpu_number; // number of CPUs, discovered from taskset
+    /* Number of CPUs. */
+    const unsigned int cpu_number;
     const unsigned int cluster_size;
 
-    ResourceGroup res_groups; // set of resource groups
-    OutermostCS outermost_cs; // vector of set containing outermost cs per task
+    /* A vector of resource groups.  */
+    ResourceGroup res_groups;
 
-    // Constants for constraints computation
+    /* A vector of set containing the set of outermost cs per task. */
+    OutermostCS outermost_cs;
+
+    /* Constants for constraints computation.
+     * Names according to [Bandenburg 2020]. */
     Phi_i_g phi;
-    Beta_k_k beta;
+    Beta_k_g beta;
     WaitForToken W_i_g;
     TaskToResGroup task_to_group;
     ResourceGroup res_acquired_by_other;
 
+    /* Not used now, might be useful for further extensions.  */
     LengthOutermostCS length_outermost_cs;
 
-    // Utility methods
+    /* Utility methods. */
     void compute_subset_acquired_by_other();
     void compute_token_waiting_times();
     unsigned int max_overlapping_jobs(const TaskInfo& tx) const;
@@ -48,14 +55,14 @@ private:
     bool are_cs_possibly_conflicting(const LockSet& ls,
                                      const LockSet& ls1) const;
 
-    // Constraints according to [Brandenburg 2020]
+    /* Constraints according to [Brandenburg 2020]. */
     void add_cs_blocking_constraints();
     void add_per_task_token_blocking_constraint();
     void add_per_cluster_token_blocking_constraint();
     void add_per_cluster_RSM_constraint();
     void add_per_task_RSM_constraint();
 
-    // Composable methods
+    /* Composable methods. */
     void add_gipp_constraints();
     void set_blocking_objective_gipp();
 
@@ -71,11 +78,11 @@ public:
             unsigned int cpu_num,
             unsigned int c_size,
             Phi_i_g p,
-            Beta_k_k b,
+            Beta_k_g b,
             TaskToResGroup ttg,
             LengthOutermostCS l_ocs);
 
-    // LP solver invocation here
+    /* LP solver invocation here. */
     unsigned long solve();
 
 };
@@ -89,7 +96,7 @@ PartitionedGIPPLP::PartitionedGIPPLP(
         unsigned int cpu_num,
         unsigned int c_size,
         Phi_i_g ps,
-        Beta_k_k bs,
+        Beta_k_g bs,
         TaskToResGroup ttg,
         LengthOutermostCS l_ocs)
       : i(task_under_analysis),
@@ -861,7 +868,7 @@ void initialize_taskset_constants(
         const ResourceGroup& rgs,
         const unsigned int n_clusters,
         Phi_i_g& phi_i_g,
-        Beta_k_k& beta_k_g,
+        Beta_k_g& beta_k_g,
         TaskToResGroup& task_to_group,
         LengthOutermostCS& l_ocs)
 {
@@ -1014,7 +1021,7 @@ BlockingBounds* lp_gipp_bounds(
     OutermostCS outer_cs;
     TaskToResGroup task_to_group;
     Phi_i_g phi;
-    Beta_k_k beta;
+    Beta_k_g beta;
     LengthOutermostCS l_ocs;
 
     /* To adapt GIPP analysis to RNLP we

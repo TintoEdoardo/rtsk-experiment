@@ -25,6 +25,7 @@ def generate_taskset(
         n_tasks,
         n_ls_tasks,
         utilization,
+        utilization_ls,
         n_cpu,
         group_size_nls,
         group_type_nls,
@@ -35,16 +36,14 @@ def generate_taskset(
         period_ls,
         period_nls,
         n_resources_ls,
-        n_resources_nls):
+        n_resources_nls,
+        asymmetric_comp):
 
     # Initialize values
     number_of_tasks     = n_tasks
     number_of_ls_tasks  = n_ls_tasks
     number_of_nls_tasks = n_tasks - n_ls_tasks
 
-    # Utilization is chosen arbitrary
-    # utilization_ls = utilization * (float(number_of_ls_tasks)/number_of_tasks)
-    utilization_ls  = utilization * min((float(number_of_ls_tasks)/number_of_tasks), 0.5)
     utilization_nls = utilization - utilization_ls
 
     # Define taskset for experiment:
@@ -84,6 +83,8 @@ def generate_taskset(
     elif group_size_nls == 4:
         if group_type_nls == "wide":
             group_conf_nls = group_spec.group_4_wide
+        elif group_type_nls == "wide_2":
+            group_conf_nls = group_spec.group_4_wide_2
         else:
             group_conf_nls = group_spec.group_4_deep
             group_conf_ls = group_spec.group_3_deep
@@ -122,7 +123,7 @@ def generate_taskset(
                 critical_sections_length_ls[t].append(cs)
 
         # Generate critical sections for ls tasks
-        ls_offset           = group_conf_nls["resources"]
+        ls_offset = group_conf_nls["resources"]
 
         for i in xrange(0, len(t_ls_gipp)):
 
@@ -148,11 +149,24 @@ def generate_taskset(
     issued_req_nls = [random.randint(1, max_issued_req_nls) for _ in range(0, number_of_nls_tasks)]
 
     # Just for asymmetric critical sections assignment
-    # issued_req_nls[0] = len(group_conf_nls["minimal_requests"])
+    if asymmetric_comp:
+        issued_req_nls[0] = len(group_conf_nls["minimal_requests"])
+        critical_sections_nls  \
+            = assign_cs_asymmetric(
+                group_conf_nls,
+                group_associations_nls,
+                number_of_nls_tasks,
+                issued_req_nls,
+                n_resources_nls)
 
-    # Assign critical sections
-    critical_sections_nls \
-        = assign_cs(group_conf_nls, group_associations_nls, number_of_nls_tasks, issued_req_nls, n_resources_nls)
+    else:
+        critical_sections_nls \
+            = assign_cs(
+                group_conf_nls,
+                group_associations_nls,
+                number_of_nls_tasks,
+                issued_req_nls,
+                n_resources_nls)
 
     # Compute critical section length for nls tasks
     critical_sections_length_nls = [[] for _ in range(0, number_of_nls_tasks)]

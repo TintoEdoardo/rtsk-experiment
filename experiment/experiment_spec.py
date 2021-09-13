@@ -39,14 +39,23 @@ experiment_4["group_conf"]      = (4, "wide")
 experiment_4["max_request"]     = 10
 experiment_4["resources_nls"]   = 4
 
+experiment_5 = dict()
+experiment_5["cpu_number"]      = 4
+experiment_5["utilization"]     = 1.60
+experiment_5["tasks_number"]    = 8
+experiment_5["ls_tasks_number"] = 2
+experiment_5["group_conf"]      = (4, "wide_2")
+experiment_5["max_request"]     = 10
+experiment_5["resources_nls"]   = 8
+
 
 # Experiment array
 experiments = [
     experiment_1,
     experiment_2,
     experiment_3,
-    experiment_4
-]
+    experiment_4,
+    experiment_5]
 
 # Cluster size
 cluster_size = 1
