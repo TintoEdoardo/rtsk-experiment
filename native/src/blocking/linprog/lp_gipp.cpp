@@ -12,7 +12,7 @@ typedef std::vector<std::vector<unsigned int > > LengthOutermostCS;
 
 
 
-class PartitionedGIPPLP : protected LinearProgram
+class ClusteredGIPPLP : protected LinearProgram
 {
 
 private:
@@ -69,7 +69,7 @@ private:
 
 public:
 
-    PartitionedGIPPLP(
+    ClusteredGIPPLP(
             const ResourceSharingInfo& tsk,
             const CriticalSectionsOfTaskset& tsk_cs,
             const ResourceGroup& r_groups,
@@ -87,7 +87,7 @@ public:
 
 };
 
-PartitionedGIPPLP::PartitionedGIPPLP(
+ClusteredGIPPLP::ClusteredGIPPLP(
         const ResourceSharingInfo& tsk,
         const CriticalSectionsOfTaskset& tsk_cs,
         const ResourceGroup& r_groups,
@@ -129,14 +129,14 @@ PartitionedGIPPLP::PartitionedGIPPLP(
 
 /* Compute the number of jobs of task T_x
  * overlapping with the job J_i of T_i. */
-unsigned int PartitionedGIPPLP::max_overlapping_jobs(const TaskInfo& tx) const
+unsigned int ClusteredGIPPLP::max_overlapping_jobs(const TaskInfo& tx) const
 {
     return tx.get_max_num_jobs(ti.get_response());
 }
 
 /* Constraint 22 in [Brandenburg 2020]
  * Prevent any blocking critical section from being counted twice. */
-void PartitionedGIPPLP::add_cs_blocking_constraints()
+void ClusteredGIPPLP::add_cs_blocking_constraints()
 {
 
     unsigned int x = 0;
@@ -188,7 +188,7 @@ void PartitionedGIPPLP::add_cs_blocking_constraints()
 
 /* Wi,g upper-bounds the number of times Ji must wait for
  * a token of group g. */
-void PartitionedGIPPLP::compute_token_waiting_times()
+void ClusteredGIPPLP::compute_token_waiting_times()
 {
 
     unsigned int k = ti.get_cluster();
@@ -240,7 +240,7 @@ void PartitionedGIPPLP::compute_token_waiting_times()
 /* Constraints 25 in [Brandenburg 2020].
  * Establish a constraint on token blocking due
  * to each task. */
-void PartitionedGIPPLP::add_per_task_token_blocking_constraint()
+void ClusteredGIPPLP::add_per_task_token_blocking_constraint()
 {
 
     unsigned int g_index;
@@ -291,7 +291,7 @@ void PartitionedGIPPLP::add_per_task_token_blocking_constraint()
 /* Constraints 26 in [Brandenburg 2020].
  * Establish a bound on the aggregate token blocking
  * across all tasks in each cluster. */
-void PartitionedGIPPLP::add_per_cluster_token_blocking_constraint()
+void ClusteredGIPPLP::add_per_cluster_token_blocking_constraint()
 {
 
     unsigned int g_index;
@@ -359,7 +359,7 @@ void PartitionedGIPPLP::add_per_cluster_token_blocking_constraint()
 /* Constraints 27 in [Brandenburg 2020].
  * Establish a bound on per-cluster RSM blocking across
  * all tasks in the system. */
-void PartitionedGIPPLP::add_per_cluster_RSM_constraint()
+void ClusteredGIPPLP::add_per_cluster_RSM_constraint()
 {
 
     unsigned int g_index;
@@ -442,7 +442,7 @@ void PartitionedGIPPLP::add_per_cluster_RSM_constraint()
 
 /* Compute the set of all combinations of resources in group g
  * acquired by other tasks. */
-void PartitionedGIPPLP::compute_subset_acquired_by_other()
+void ClusteredGIPPLP::compute_subset_acquired_by_other()
 {
 
     unsigned int tx_index;
@@ -486,7 +486,7 @@ void PartitionedGIPPLP::compute_subset_acquired_by_other()
 }
 
 /* Check if ls an ls1 are possibly conflicting. */
-bool PartitionedGIPPLP::are_cs_possibly_conflicting(
+bool ClusteredGIPPLP::are_cs_possibly_conflicting(
         const LockSet& ls,
         const LockSet& ls1) const
 {
@@ -523,7 +523,7 @@ bool PartitionedGIPPLP::are_cs_possibly_conflicting(
 
 /* Compute the number of possibly conflicting outermost cs.
  * This value is identified as Fi(s). */
-unsigned int PartitionedGIPPLP::count_conflicting_outermost_cs(
+unsigned int ClusteredGIPPLP::count_conflicting_outermost_cs(
         const LockSet& s) const
 {
 
@@ -553,7 +553,7 @@ unsigned int PartitionedGIPPLP::count_conflicting_outermost_cs(
 
 /* Constraints 28 in [Brandenburg 2020].
  * Establish a constraint on RSM blocking globally. */
-void PartitionedGIPPLP::add_per_task_RSM_constraint()
+void ClusteredGIPPLP::add_per_task_RSM_constraint()
 {
 
     unsigned int g_index;
@@ -647,7 +647,7 @@ void PartitionedGIPPLP::add_per_task_RSM_constraint()
 
 }
 
-void PartitionedGIPPLP::add_gipp_constraints()
+void ClusteredGIPPLP::add_gipp_constraints()
 {
     add_cs_blocking_constraints();
     add_per_task_token_blocking_constraint();
@@ -656,7 +656,7 @@ void PartitionedGIPPLP::add_gipp_constraints()
     add_per_task_RSM_constraint();
 }
 
-void PartitionedGIPPLP::set_blocking_objective_gipp()
+void ClusteredGIPPLP::set_blocking_objective_gipp()
 {
 
     LinearExpression *obj = get_objective();
@@ -709,7 +709,7 @@ void PartitionedGIPPLP::set_blocking_objective_gipp()
 }
 
 
-unsigned long PartitionedGIPPLP::solve()
+unsigned long ClusteredGIPPLP::solve()
 {
 
     Solution *solution;
@@ -1050,7 +1050,7 @@ BlockingBounds* lp_gipp_bounds(
      * done exactly once per taskset. */
     for (unsigned int i = 0; i < info.get_tasks().size(); i++)
     {
-        PartitionedGIPPLP lp(info, cst, r_group, outer_cs, (int) i, cpu_num, c_size, phi, beta, task_to_group, l_ocs);
+        ClusteredGIPPLP lp(info, cst, r_group, outer_cs, (int) i, cpu_num, c_size, phi, beta, task_to_group, l_ocs);
         (*results)[i] = lp.solve();
     }
 
