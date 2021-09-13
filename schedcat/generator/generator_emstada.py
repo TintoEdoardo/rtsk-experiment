@@ -151,7 +151,10 @@ def gen_periods(n, nsets, min, max, gran, dist):
 #   utilization:            target utilization of the task set to be generated
 def gen_taskset(periods, period_distribution, tasks_n, utilization,
                 period_granularity=None, scale=ms2us, want_integral=True):
-    if periods in NAMED_PERIODS:
+    if type(period_distribution) == list:
+        period_min = period_distribution[0]
+        period_max = period_distribution[-1]
+    elif periods in NAMED_PERIODS:
         # Look up by name.
         (period_min, period_max) = NAMED_PERIODS[periods]
     else:

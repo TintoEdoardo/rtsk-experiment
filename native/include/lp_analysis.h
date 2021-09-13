@@ -2,6 +2,7 @@
 #define LP_ANALYSYS_H_
 
 #include "sharedres_types.h"
+#include "nested_cs.h"
 
 /* The following analyses are described in the extended version of:
  *
@@ -133,7 +134,8 @@ bool lp_pedf_fifo_preempt_is_schedulable(const ResourceSharingInfo& info);
 /* P-EDF Lock-Free Synchronization with Preemptive Commit Loops, using blocking aware PDC */
 bool lp_pedf_lockfree_preempt_is_schedulable(const ResourceSharingInfo& info);
 
-/* P-EDF Lock-Free Synchronization with NP Commit Loops, using blocking aware PDC */
+/* P-EDF Lock-Free Synchronization
+ * with NP Commit Loops, using blocking aware PDC */
 bool lp_pedf_lockfree_NP_is_schedulable(const ResourceSharingInfo& info);
 
 /* The following analyses are described in the extended version of:
@@ -142,8 +144,11 @@ bool lp_pedf_lockfree_NP_is_schedulable(const ResourceSharingInfo& info);
  * Sections in Real-Time Nested Locking", ECRTS'20.
  */
 
-BlockingBounds* lp_gipp_bounds(const ResourceSharingInfo& info,
-                               const ResourceLocality& locality, bool use_RTA = true);
-
+BlockingBounds* lp_gipp_bounds(
+        const ResourceSharingInfo& info,
+        const CriticalSectionsOfTaskset& cst,
+        unsigned int cpu_num,
+        unsigned int c_size,
+        bool apply_to_rnlp);
 
 #endif /* LP_ANALYSYS_H_ */

@@ -11,14 +11,15 @@ import schedcat.model.resources as r
 
 import schedcat.util.linprog
 
+
 class Locking(unittest.TestCase):
     def setUp(self):
         self.ts = tasks.TaskSystem([
-                tasks.SporadicTask(1,  4),
-                tasks.SporadicTask(1,  5),
-                tasks.SporadicTask(3,  9),
-                tasks.SporadicTask(3, 18),
-            ])
+            tasks.SporadicTask(1, 4),
+            tasks.SporadicTask(1, 5),
+            tasks.SporadicTask(3, 9),
+            tasks.SporadicTask(3, 18),
+        ])
         r.initialize_resource_model(self.ts)
         for i, t in enumerate(self.ts):
             t.partition = 0
@@ -44,7 +45,6 @@ class Locking(unittest.TestCase):
         self.assertEqual(self.ts[2].preemption_level, 1)
         self.assertEqual(self.ts[3].preemption_level, 1)
 
-
     def test_cpp_bridge(self):
         lb.assign_fp_preemption_levels(self.ts)
         self.assertIsNotNone(lb.get_cpp_model(self.ts))
@@ -52,15 +52,15 @@ class Locking(unittest.TestCase):
 
 
 class ApplyBounds(unittest.TestCase):
-# This primarily checks that the tests don't crash.
-# TODO: add actual tests of the computed bounds.
+    # This primarily checks that the tests don't crash.
+    # TODO: add actual tests of the computed bounds.
     def setUp(self):
         self.ts = tasks.TaskSystem([
-                tasks.SporadicTask(1,  4),
-                tasks.SporadicTask(1,  5),
-                tasks.SporadicTask(3,  9),
-                tasks.SporadicTask(3, 18),
-            ])
+            tasks.SporadicTask(1, 4),
+            tasks.SporadicTask(1, 5),
+            tasks.SporadicTask(3, 9),
+            tasks.SporadicTask(3, 18),
+        ])
         self.ts_ = self.ts.copy()
         r.initialize_resource_model(self.ts)
         for i, t in enumerate(self.ts):
@@ -101,7 +101,6 @@ class ApplyBounds(unittest.TestCase):
             self.assertEqual(t.blocked, 0)
             self.assertEqual(t.cost, t_.cost)
             self.assertEqual(t.period, t_.period)
-
 
     def test_mpcp(self):
         lb.apply_mpcp_bounds(self.ts, use_virtual_spin=False)
@@ -175,7 +174,7 @@ class ApplyBounds(unittest.TestCase):
         self.assertEqual(self.ts[3].cost, ts[3].cost)
 
     def test_clustered_kx_omlp_bounds(self):
-        replicas = {0:2, 1:4}
+        replicas = {0: 2, 1: 4}
         lb.apply_clustered_kx_omlp_bounds(self.ts, 2, replicas)
         self.assertEqual(self.ts[0].cost, 1 + 1 + 0 + 2)
         self.assertEqual(self.ts[1].cost, 1 + 1 + 0 + 2)
@@ -183,7 +182,7 @@ class ApplyBounds(unittest.TestCase):
         self.assertEqual(self.ts[3].cost, 3 + 1 + 0)
 
     def test_clustered_kx_omlp_donation_blocking(self):
-        replicas = {0:4, 1:4}
+        replicas = {0: 4, 1: 4}
         lb.apply_clustered_kx_omlp_bounds(self.ts, 2, replicas)
         self.assertEqual(self.ts[0].cost, 1 + 0 + 0 + 1)
         self.assertEqual(self.ts[1].cost, 1 + 0 + 0 + 1)
@@ -273,9 +272,7 @@ class Test_bounds(unittest.TestCase):
         self.rsi1.add_task(30, 30, 2, 5)
         self.rsi1.add_request(0, 1, 7)
 
-
     def test_arrival_blocking_mtx(self):
-
         c = 1
 
         res = cpp.task_fair_mutex_bounds(self.rsi1, c)
@@ -285,7 +282,6 @@ class Test_bounds(unittest.TestCase):
         self.assertEqual(0, res.get_arrival_blocking(3))
         self.assertEqual(7 + 7 + 77, res.get_arrival_blocking(4))
         self.assertEqual(0, res.get_arrival_blocking(5))
-
 
     def test_arrival_blocking_msrp(self):
         res = cpp.msrp_bounds_holistic(self.rsi1)
@@ -357,7 +353,6 @@ class Test_bounds(unittest.TestCase):
         self.assertEqual(0, res.get_arrival_blocking(5))
 
 
-
 class Test_dedicated_irq(unittest.TestCase):
 
     def setUp(self):
@@ -408,7 +403,6 @@ class Test_dedicated_irq(unittest.TestCase):
         self.assertEqual(7 + 6, res.get_blocking_count(0))
         self.assertEqual(arrival + 6 + 10 + 14, res.get_blocking_term(0))
 
-
     def test_global_irq_tfrw_blocking(self):
         cluster_size = 2
         dedicated_cpu = cpp.NO_CPU
@@ -424,8 +418,6 @@ class Test_dedicated_irq(unittest.TestCase):
         self.assertEqual(15, res.get_blocking_count(0))
         self.assertEqual(arrival + 1 + 6 + 10 + 14, res.get_blocking_term(0))
 
-
-
         res = cpp.task_fair_rw_bounds(self.rsi_rw, self.rsi, cluster_size, dedicated_cpu)
 
         self.assertEqual(0, res.get_arrival_blocking(15))
@@ -437,8 +429,6 @@ class Test_dedicated_irq(unittest.TestCase):
         self.assertEqual(7, res.get_blocking_count(0))
         # pessimism
         self.assertEqual(arrival + 1 + 14, res.get_blocking_term(0))
-
-
 
     def test_dedicated_irq_tfrw_blocking(self):
         cluster_size = 2
@@ -454,8 +444,6 @@ class Test_dedicated_irq(unittest.TestCase):
         self.assertEqual(7 + 6, res.get_blocking_count(0))
         self.assertEqual(arrival + 6 + 10 + 14, res.get_blocking_term(0))
 
-
-
         res = cpp.task_fair_rw_bounds(self.rsi_rw, self.rsi, cluster_size, dedicated_cpu)
 
         self.assertEqual(0, res.get_arrival_blocking(15))
@@ -467,8 +455,6 @@ class Test_dedicated_irq(unittest.TestCase):
         self.assertEqual(3, res.get_blocking_count(0))
         # pessimism
         self.assertEqual(arrival + 7, res.get_blocking_term(0))
-
-
 
     def test_global_irq_pfrw_blocking(self):
         cluster_size = 2
@@ -484,7 +470,6 @@ class Test_dedicated_irq(unittest.TestCase):
         self.assertEqual(15, res.get_blocking_count(0))
         self.assertEqual(arrival + 1 + 6 + 10 + 14, res.get_blocking_term(0))
 
-
         res = cpp.phase_fair_rw_bounds(self.rsi_rw, cluster_size, dedicated_cpu)
 
         self.assertEqual(0, res.get_arrival_blocking(15))
@@ -496,8 +481,6 @@ class Test_dedicated_irq(unittest.TestCase):
         self.assertEqual(7, res.get_blocking_count(0))
         # pessimism
         self.assertEqual(arrival + 1 + 14, res.get_blocking_term(0))
-
-
 
     def test_dedicated_irq_pfrw_blocking(self):
         cluster_size = 2
@@ -512,7 +495,6 @@ class Test_dedicated_irq(unittest.TestCase):
         self.assertEqual(arrival, res.get_arrival_blocking(0))
         self.assertEqual(7 + 6, res.get_blocking_count(0))
         self.assertEqual(arrival + 6 + 10 + 14, res.get_blocking_term(0))
-
 
         res = cpp.phase_fair_rw_bounds(self.rsi_rw, cluster_size, dedicated_cpu)
 
@@ -632,7 +614,6 @@ class Test_mpcp_terms(unittest.TestCase):
         self.loc = cpp.ResourceLocality()
         self.loc.assign_resource(0, 1)
 
-
     def test_remote_blocking(self):
         res = cpp.mpcp_bounds(self.rsi, False)
 
@@ -671,7 +652,6 @@ class Test_part_fmlp_terms(unittest.TestCase):
         self.loc = cpp.ResourceLocality()
         self.loc.assign_resource(0, 1)
 
-
     def test_fmlp_remote(self):
         res = cpp.part_fmlp_bounds(self.rsi, True)
 
@@ -691,13 +671,12 @@ class Test_part_fmlp_terms(unittest.TestCase):
 class Test_partition(unittest.TestCase):
     def setUp(self):
         self.ts = tasks.TaskSystem([
-                tasks.SporadicTask(1,  4),
-                tasks.SporadicTask(1,  5),
-                tasks.SporadicTask(3,  9),
-                tasks.SporadicTask(3, 18),
-            ])
+            tasks.SporadicTask(1, 4),
+            tasks.SporadicTask(1, 5),
+            tasks.SporadicTask(3, 9),
+            tasks.SporadicTask(3, 18),
+        ])
         r.initialize_resource_model(self.ts)
-
 
     def test_singleton(self):
         by_task, by_res = lp.find_connected_components(self.ts)
@@ -787,7 +766,7 @@ class Test_linprog(unittest.TestCase):
 
         for t in self.ts:
             t.response_time = t.period
-            t.partition =  t.id % 2
+            t.partition = t.id % 2
 
         self.ts_no_req = self.ts.copy()
 
@@ -799,7 +778,7 @@ class Test_linprog(unittest.TestCase):
         self.t3.resmodel[0].add_request(3)
 
         # only one resource, assigned to the first processor
-        self.resource_locality = { 0: 0 }
+        self.resource_locality = {0: 0}
 
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_dpcp_cpp(self):
@@ -808,7 +787,6 @@ class Test_linprog(unittest.TestCase):
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_dflp_cpp(self):
         lb.apply_lp_dflp_bounds(self.ts, self.resource_locality)
-
 
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_dpcp_cpp_no_req(self):
@@ -830,12 +808,13 @@ class Test_linprog(unittest.TestCase):
         self.assertEqual(self.ts_no_req[2].blocked, 0)
         self.assertEqual(self.ts_no_req[2].suspended, 0)
 
+
 class Test_reasonble_priority(unittest.TestCase):
 
     def setUp(self):
         self.ts = tasks.TaskSystem([
             tasks.SporadicTask(x * 10, x * 100) for x in xrange(1, 10)
-            ])
+        ])
 
     def test_is_reasonable_priority_assignment(self):
         self.assertTrue(lb.is_reasonable_priority_assignment(1, self.ts))
@@ -851,14 +830,15 @@ class Test_reasonble_priority(unittest.TestCase):
 
 import schedcat.sched.fp.rta as rta
 
+
 class RTABlockingAccounting(unittest.TestCase):
     def setUp(self):
         self.ts = tasks.TaskSystem([
-                tasks.SporadicTask(10,  100),
-                tasks.SporadicTask(10,  100),
-                tasks.SporadicTask(10,  100),
-                tasks.SporadicTask(10,  100),
-            ])
+            tasks.SporadicTask(10, 100),
+            tasks.SporadicTask(10, 100),
+            tasks.SporadicTask(10, 100),
+            tasks.SporadicTask(10, 100),
+        ])
 
         r.initialize_resource_model(self.ts)
 
@@ -881,7 +861,6 @@ class RTABlockingAccounting(unittest.TestCase):
 
         # assign preemption levels
         lb.assign_fp_preemption_levels(self.ts)
-
 
     def test_no_double_accounting_spin(self):
         "test that spin delay and arrival blocking are correctly accounted for"
@@ -967,7 +946,6 @@ class RTABlockingAccounting(unittest.TestCase):
         self.assertEqual(self.p0[1].response_time, 10 + 10 + 1 + 1)
         self.assertEqual(self.p1[1].response_time, 10 + 10 + 1 + 1)
 
-
     def test_no_double_accounting_spin_phase_fair_sob(self):
         "test that s-oblivious spin delay and arrival blocking are correctly accounted for"
         lb.apply_phase_fair_rw_bounds(self.ts, 1)
@@ -1052,7 +1030,6 @@ class RTABlockingAccounting(unittest.TestCase):
         self.assertEqual(self.p0[1].response_time, 10 + 13 + 1)
         self.assertEqual(self.p1[1].response_time, 10 + 13 + 1)
 
-
     def test_no_double_accounting_saw(self):
         "test that suspension-aware analysis is correctly accounted for"
         lb.apply_part_fmlp_bounds(self.ts)
@@ -1113,7 +1090,6 @@ class RTABlockingAccounting(unittest.TestCase):
 
         self.assertEqual(self.p0[1].response_time, 10 + 10 + 2)
         self.assertEqual(self.p1[1].response_time, 10 + 10 + 2)
-
 
     @unittest.skipIf(not lb.lp_cpp_available, "no native LP solver available")
     def test_no_double_accounting_mpcp(self):
@@ -1176,7 +1152,6 @@ class Test_nested_resource_model(unittest.TestCase):
             self.m.add_nested(self.nested, 8, 1)
 
     def test_iterator(self):
-
         all = [cs for cs in self.m.all()]
         self.assertEqual([self.outer1, self.outer2, self.nested1, self.nested2,
                           self.nested3, self.nested4], all)
@@ -1186,15 +1161,14 @@ class Test_nested_resource_model(unittest.TestCase):
 
         all_flat = [x for x in self.m.all_flat()]
         expected = [
-            ( 8, 1, -1),
-            ( 8, 1, -1),
-            ( 9, 1,  1),
-            ( 9, 1,  1),
-            (10, 1,  3),
-            (10, 1,  1)
+            (8, 1, -1),
+            (8, 1, -1),
+            (9, 1, 1),
+            (9, 1, 1),
+            (10, 1, 3),
+            (10, 1, 1)
         ]
         self.assertEqual(expected, all_flat)
-
 
     def test_well_ordered_nesting(self):
         self.assertTrue(self.m.all_nesting_well_ordered())
@@ -1417,10 +1391,9 @@ class Test_cpp_non_nested_analysis2(unittest.TestCase):
         r.convert_to_group_locks(self.ts)
         res = lb.apply_pfp_lp_msrp_bounds(self.ts)
 
-        self.assertEqual(self.t1.blocked, 5 + 7 )
+        self.assertEqual(self.t1.blocked, 5 + 7)
         self.assertEqual(self.t2.blocked, 1 + 1 + 7 + 7)
         self.assertEqual(self.t3.blocked, 1 + 1 + 5 + 5)
-
 
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_fifo(self):
@@ -1429,6 +1402,7 @@ class Test_cpp_non_nested_analysis2(unittest.TestCase):
         self.assertEqual(self.t1.blocked, 5 + 7)
         self.assertEqual(self.t2.blocked, 1 + 1 + 7 + 7)
         self.assertEqual(self.t3.blocked, 1 + 1 + 5 + 5)
+
 
 class Test_cpp_nested_analysis_trivial1(unittest.TestCase):
     def setUp(self):
@@ -1463,7 +1437,6 @@ class Test_cpp_nested_analysis_trivial1(unittest.TestCase):
         self.assertEqual(self.t2.blocked, 1 + 1 + 7 + 7)
         self.assertEqual(self.t3.blocked, 1 + 1 + 5 + 5)
 
-
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_fifo(self):
         res = lb.apply_pfp_nested_fifo_spinlock_bounds(self.ts)
@@ -1495,8 +1468,6 @@ class Test_cpp_nested_analysis_trivial2(unittest.TestCase):
         cs = self.t3.critical_sections.add_outermost(1, 7)
         self.t3.critical_sections.add_nested(cs, 3, 7)
 
-
-
         for i, t in enumerate(self.ts):
             t.response_time = t.deadline
             t.partition = i
@@ -1511,7 +1482,6 @@ class Test_cpp_nested_analysis_trivial2(unittest.TestCase):
         self.assertEqual(self.t1.blocked, 5 + 5 + 20)
         self.assertEqual(self.t2.blocked, 1 + 1 + 20)
         self.assertEqual(self.t3.blocked, 2 * (1 + 1 + 5 + 5))
-
 
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_fifo(self):
@@ -1550,7 +1520,6 @@ class Test_cpp_nested_analysis_double_indirect(unittest.TestCase):
         cs = self.t4.critical_sections.add_outermost(1, 4)
         self.t4.critical_sections.add_nested(cs, 4, 4)
 
-
         for i, t in enumerate(self.ts):
             t.response_time = 40
             t.partition = i
@@ -1569,7 +1538,6 @@ class Test_cpp_nested_analysis_double_indirect(unittest.TestCase):
 
         self.assertEqual(self.t1.blocked, 4 + 6 + 10)
 
-
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_fifo(self):
         res = lb.apply_pfp_nested_fifo_spinlock_bounds(self.ts)
@@ -1585,7 +1553,6 @@ class Test_cpp_nested_analysis_double_indirect(unittest.TestCase):
         res = lb.apply_pfp_lp_msrp_bounds(self.ts)
 
         self.assertEqual(self.t1.blocked, 4 + 6 + 10 + 10)
-
 
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_fifo2(self):
@@ -1771,9 +1738,8 @@ class Test_cpp_np_fifo_no_loop_back(unittest.TestCase):
         res = lb.apply_msrp_bounds(self.ts, self.n)
 
         for i, t in enumerate(self.ts):
-            self.assertEqual(t.remote_blocking,\
+            self.assertEqual(t.remote_blocking, \
                              sum([j + 1 for j in xrange(self.n) if j != i]))
-
 
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_group_locks(self):
@@ -1781,7 +1747,7 @@ class Test_cpp_np_fifo_no_loop_back(unittest.TestCase):
         res = lb.apply_pfp_lp_msrp_bounds(self.ts)
 
         for i, t in enumerate(self.ts):
-            self.assertEqual(t.blocked,\
+            self.assertEqual(t.blocked, \
                              sum([j + 1 for j in xrange(self.n) if j != i]))
 
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
@@ -1789,7 +1755,7 @@ class Test_cpp_np_fifo_no_loop_back(unittest.TestCase):
         res = lb.apply_pfp_nested_fifo_spinlock_bounds(self.ts)
 
         for i, t in enumerate(self.ts):
-            self.assertEqual(t.blocked,\
+            self.assertEqual(t.blocked, \
                              sum([j + 1 for j in xrange(self.n) if j != i]))
 
 
@@ -1845,7 +1811,7 @@ class Test_cpp_fifo_spin_locks_pcp(unittest.TestCase):
         self.assertEqual(self.t1.blocked, 7)
         self.assertEqual(self.t2.blocked, 8)
         self.assertEqual(self.t3.blocked, 21)
-        self.assertEqual(self.t4.blocked, 1) # account for higher-prio spin delay
+        self.assertEqual(self.t4.blocked, 1)  # account for higher-prio spin delay
 
     @unittest.skipIf(not schedcat.locking.bounds.lp_cpp_available, "no native LP solver available")
     def test_fifo(self):
@@ -1854,7 +1820,8 @@ class Test_cpp_fifo_spin_locks_pcp(unittest.TestCase):
         self.assertEqual(self.t1.blocked, 7)
         self.assertEqual(self.t2.blocked, 8)
         self.assertEqual(self.t3.blocked, 1 + 20)
-        self.assertEqual(self.t4.blocked, 1) # account for higher-prio spin delay
+        self.assertEqual(self.t4.blocked, 1)  # account for higher-prio spin delay
+
 
 class Test_cpp_nested_analysis(unittest.TestCase):
     def setUp(self):
@@ -1870,13 +1837,13 @@ class Test_cpp_nested_analysis(unittest.TestCase):
         self.t1.critical_sections.add_outermost(1, 1)
         self.t1.critical_sections.add_outermost(2, 1)
         self.t1.critical_sections.add_outermost(2, 3)
-#        self.t1.critical_sections.add_outermost(4, 1)
+        #        self.t1.critical_sections.add_outermost(4, 1)
 
         self.t2.critical_sections.add_outermost(2, 1)
         self.t2.critical_sections.add_outermost(2, 1)
         self.t2.critical_sections.add_outermost(3, 1)
         self.t2.critical_sections.add_outermost(3, 3)
-#        self.t2.critical_sections.add_outermost(4, 2)
+        #        self.t2.critical_sections.add_outermost(4, 2)
 
         self.t3.critical_sections.add_nested(self.t2.critical_sections[0], 3, 1)
         self.t3.critical_sections.add_outermost(3, 1)
@@ -1884,8 +1851,7 @@ class Test_cpp_nested_analysis(unittest.TestCase):
         self.t3.critical_sections.add_outermost(1, 1)
         self.t3.critical_sections.add_outermost(1, 3)
         self.t3.critical_sections.add_nested(self.t3.critical_sections[-1], 3, 1)
-#        self.t3.critical_sections.add_outermost(4, 3)
-
+        #        self.t3.critical_sections.add_outermost(4, 3)
 
         for i, t in enumerate(self.ts):
             t.response_time = t.deadline
@@ -1906,3 +1872,41 @@ class Test_cpp_nested_analysis(unittest.TestCase):
         self.assertEqual(self.t1.blocked, 21)
         self.assertEqual(self.t2.blocked, 17)
         self.assertEqual(self.t3.blocked, 27)
+
+
+class Test_cpp_gipp_bounds(unittest.TestCase):
+    def setUp(self):
+
+        self.trivial_ts = tasks.TaskSystem([
+            tasks.SporadicTask(10,   33,  24),
+            tasks.SporadicTask(10,   95,  81),
+            tasks.SporadicTask(12,  63, 63),
+        ])
+        self.trivial_num_cpus = 2
+
+        r.initialize_resource_model(self.trivial_ts)
+        lb.assign_edf_preemption_levels(self.trivial_ts)
+
+        for i, t in enumerate(self.trivial_ts):
+            t.partition = 0
+            t.response_time = 4*t.cost
+
+        self.trivial_ts[0].partition = 0
+        self.trivial_ts[1].partition = 0
+        self.trivial_ts[2].partition = 1
+
+        r.initialize_nested_resource_model(self.trivial_ts)
+
+        self.trivial_ts[0].critical_sections.add_outermost(0, 1)
+        self.trivial_ts[0].critical_sections.add_nested(self.trivial_ts[0].critical_sections[0], 1, 7)
+        self.trivial_ts[1].critical_sections.add_outermost(1, 1)
+        self.trivial_ts[1].critical_sections.add_outermost(1, 1)
+        self.trivial_ts[2].critical_sections.add_outermost(2, 1)
+        self.trivial_ts[2].critical_sections.add_outermost(2, 1)
+        self.trivial_ts[2].critical_sections.add_nested(self.trivial_ts[2].critical_sections[0], 3, 7)
+
+    def test_lp_gipp_bounds(self):
+        lb.apply_gipp_bounds(self.trivial_ts, self.trivial_num_cpus, 1, False)
+        test = rta.is_schedulable(self.trivial_num_cpus, self.trivial_ts)
+        print test
+

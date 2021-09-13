@@ -62,7 +62,6 @@ CriticalSectionsOfTaskset::get_transitive_nesting_relationship() const
 	return nested;
 }
 
-
 LockSet CriticalSection::get_outer_locks(const CriticalSectionsOfTask &task) const
 {
 	LockSet already_held;

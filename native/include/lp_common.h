@@ -17,9 +17,10 @@ enum blocking_type
 	BLOCKING_DIRECT,
 	BLOCKING_INDIRECT,
 	BLOCKING_PREEMPT,
-	BLOCKING_TOKEN,
+	BLOCKING_OTHER,
+
 	BLOCKING_RSM,
-	BLOCKING_OTHER
+	BLOCKING_TOKEN
 };
 
 // s-oblivious analysis reuses BLOCKING_DIRECT as a catch-all blocking type.
@@ -34,7 +35,7 @@ private:
 		assert(task_id < (1 << 30));
 		assert(res_id < (1 << 10));
 		assert(req_id < (1 << 22));
-		assert(blocking_type < (1 << 2));
+		assert(blocking_type < (1 << 3));
 
 		return (blocking_type << 62) | (task_id << 30) | (req_id << 10) | res_id;
 	}
